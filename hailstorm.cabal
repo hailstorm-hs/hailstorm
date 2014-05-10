@@ -1,0 +1,21 @@
+name:                hailstorm
+version:             0.1.0.0
+synopsis:            Hailstorm is our CS240h final project
+-- description:
+license:             Apache-2.0
+license-file:        LICENSE
+author:              Thomas Dimson, Milind Ganjoo
+maintainer:          Thomas Dimson, Milind Ganjoo
+-- copyright:
+category:            Data
+build-type:          Simple
+-- extra-source-files:
+cabal-version:       >=1.10
+
+executable hailstorm
+  -- main-is:
+  -- other-modules:
+  -- other-extensions:
+  build-depends:       base >=4.6 && <4.7
+  -- hs-source-dirs:
+  default-language:    Haskell2010
