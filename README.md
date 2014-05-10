@@ -6,4 +6,5 @@
 https://github.com/jasonjckn/essays/blob/master/exactly_once_semantics.md
 
 ## Authors
-Thomas Dimson, Milind Ganjoo
+[Thomas Dimson](https://github.com/cosbynator/),
+[Milind Ganjoo] (https://github.com/mganjoo/)
