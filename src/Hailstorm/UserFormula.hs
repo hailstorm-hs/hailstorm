@@ -1,5 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
-module UserFormula where
+module Hailstorm.UserFormula where
 
 import Data.Monoid
 import qualified Data.ByteString as B
