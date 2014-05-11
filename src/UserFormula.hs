@@ -4,6 +4,8 @@ module UserFormula where
 import Data.Monoid
 import qualified Data.ByteString as B
 
+-- | A formula for stream computation over key-value tuples. Keys @k@ must
+-- be of instances of Ord and values @v@ must be instances of Monoid.
 data UserFormula k v = (Ord k, Monoid v) => UserFormula
-  { convert :: B.ByteString -> (k,v)
-  , output :: (k,v) -> IO () }
+  { convertFn :: B.ByteString -> (k,v)
+  , outputFn  :: (k,v) -> IO () }
