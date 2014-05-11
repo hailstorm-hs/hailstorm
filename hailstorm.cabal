@@ -12,10 +12,22 @@ build-type:          Simple
 -- extra-source-files:
 cabal-version:       >=1.10
 
-executable hailstorm
+library hailstorm
   -- main-is:
   -- other-modules:
   -- other-extensions:
-  build-depends:       base >=4.6 && <4.7
-  -- hs-source-dirs:
+  hs-source-dirs: src
+  exposed-modules:
+    UserFormula
+  build-depends:
+    base >=4.6 && <4.7
+   ,bytestring
   default-language:    Haskell2010
+  ghc-options: -Wall
+
+executable hailstorm_sample
+  main-is: HailstormSample.hs
+  build-depends:
+    base < 5
+   ,hailstorm
+  default-language: Haskell2010
