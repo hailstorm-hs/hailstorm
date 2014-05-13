@@ -21,11 +21,12 @@ library
     Hailstorm.UserFormula
     Hailstorm.Processors
   build-depends:
-    base >=4.6 && <4.7
-   ,bytestring
-   ,pipes
-   ,directory
-   ,filepath
+     base >=4.6 && <4.7
+   , bytestring
+   , pipes
+   , directory
+   , filepath
+   , pipes-network
   default-language:    Haskell2010
   ghc-options: -Wall
 
@@ -33,8 +34,11 @@ executable hailstorm_sample
   hs-source-dirs: src
   main-is: HailstormSample.hs
   build-depends:
-      base < 5
-    , bytestring
-    , pipes
+     base >=4.6 && <4.7
+   , bytestring
+   , pipes
+   , directory
+   , filepath
+   , pipes-network
   Other-Modules: Hailstorm.UserFormula
   default-language: Haskell2010
