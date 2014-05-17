@@ -12,12 +12,9 @@ import qualified Data.ByteString.Char8 as C8
 import qualified Pipes.Prelude as P
 
 adderFormula :: UserFormula String (Sum Int)
-adderFormula = UserFormula {
-    convertFn = \x -> (C8.unpack x, Sum 1)
-  , outputFn = \_ -> print "hi"
-  , serialize = show
-  , deserialize = read
-}
+adderFormula = newUserFormula 
+    (\x -> (C8.unpack x, Sum 1))
+    (\_ -> print "hi")
 
 topology :: HardcodedTopology
 topology = HardcodedTopology (Map.fromList [
