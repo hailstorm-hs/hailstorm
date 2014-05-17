@@ -13,6 +13,7 @@ import Pipes
 import System.IO
 import qualified Data.ByteString as B
 import qualified Data.Map as Map
+import qualified Pipes.Prelude as P
 
 data DataPartitionOffset = DataPartitionOffset B.ByteString String Integer
     deriving (Eq, Show, Read)
@@ -36,8 +37,8 @@ instance Topology HardcodedTopology where
         head downstreams
         where downstreams = fromJust $ Map.lookup processorId tmap
     
-tupleSpoutProducer :: (Show k, Show v, Monad m) => UserFormula k v -> Producer DataPartitionOffset m () -> Producer (HailstormPayload k v) m ()
-tupleSpoutProducer uf producer = for producer (\x -> case x of (DataPartitionOffset bs p o) ->  yield (HailstormPayload (convertFn uf bs) (HailstormClock $ Map.singleton p o)))
+dataToPayloadPipe :: (Show k, Show v, Monad m) => UserFormula k v -> Producer DataPartitionOffset m () -> Producer (HailstormPayload k v) m ()
+dataToPayloadPipe uf producer = for producer (\x -> case x of (DataPartitionOffset bs p o) ->  yield (HailstormPayload (convertFn uf bs) (HailstormClock $ Map.singleton p o)))
 
 handleLineProducer :: Handle -> String -> Integer -> Producer DataPartitionOffset IO ()
 handleLineProducer h partitionName offset = do
@@ -58,8 +59,8 @@ poolConnect (host, port) m = case Map.lookup (host, port) m of
     Just so -> return so
     Nothing -> connect host port (\(s, _) -> socketToHandle s WriteMode)
 
-downstreamConsumer :: (Show k, Show v, Topology t) => UserFormula k v -> String -> t -> Consumer (HailstormPayload k v) IO ()
-downstreamConsumer uf processorId topology = dcInternal Map.empty
+downstreamConsumer :: (Show k, Show v, Topology t) => String -> t -> UserFormula k v -> Consumer (HailstormPayload k v) IO ()
+downstreamConsumer processorId topology uf = dcInternal Map.empty
     where dcInternal connectionPool = do
             payload <- await
             let (host, port) = downstreamFor topology processorId payload
@@ -68,7 +69,10 @@ downstreamConsumer uf processorId topology = dcInternal Map.empty
             dcInternal $ Map.insert (host, port) h connectionPool
 
 socketProducer :: (Read k, Read v) => UserFormula k v -> Socket -> Producer (HailstormPayload k v) IO ()
-socketProducer uf s = lift (socketToHandle s ReadMode) >>= producerInternal
+socketProducer uf s = do
+    h <- lift (socketToHandle s ReadMode) 
+    lift $ hSetBuffering h LineBuffering
+    producerInternal h
     where producerInternal h = do
             t <- lift $ hGetLine h
             let [sTuple, sClock] = splitOn "\1" t
@@ -78,3 +82,21 @@ socketProducer uf s = lift (socketToHandle s ReadMode) >>= producerInternal
 
             yield (HailstormPayload tuple clock)
             producerInternal h
+
+
+runSpoutFromProducer :: (Show k, Show v, Topology t) => String -> t -> UserFormula k v -> Producer (HailstormPayload k v) IO () -> IO ()
+runSpoutFromProducer spoutId topology uf producer = 
+    let downstream = downstreamConsumer spoutId topology uf in
+    runEffect $ producer >-> downstream
+
+formulaConsumer :: UserFormula k v -> Consumer (HailstormPayload k v) IO ()
+formulaConsumer uf = forever $ do
+   payload <- await 
+   lift $ ((outputFn uf) (payloadTuple payload))
+
+runSink :: (Show k, Show v, Read k, Read v, Topology t) => String -> String ->  t -> UserFormula k v -> IO ()
+runSink sinkId port topology uf = serve HostAny port (\(s, _) -> accepted s)
+    where accepted socket = 
+            let sp = socketProducer uf socket
+                fc = formulaConsumer uf in
+            runEffect $ sp >-> fc
