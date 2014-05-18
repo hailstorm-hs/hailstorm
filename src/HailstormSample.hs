@@ -14,13 +14,19 @@ adderFormula = newUserFormula
     (\(k, v) -> print (k, v))
 
 topology :: HardcodedTopology
-topology = HardcodedTopology (Map.fromList [
-                ("spout", [("127.0.0.1", "10000")])
-           ])
+topology = HardcodedTopology {
+    processorMap = mkProcessorMap [
+        Spout "spout" 1 ["sink"]
+      , Sink "sink" 1
+    ]
+  , addresses = (Map.fromList [
+        (("sink", 0), ("127.0.0.1", "10000"))
+    ])
+}
 
 main :: IO ()
 main = do
-    consumerId <- forkIO $ runSink "sink" "10000" topology adderFormula
+    consumerId <- forkIO $ runSink ("sink", 0) topology adderFormula
     putStrLn $ "Spawned sink " ++ show consumerId
     threadDelay 1000000
     let f = fileLineProducer "data/test.txt"
