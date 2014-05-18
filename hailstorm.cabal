@@ -12,14 +12,21 @@ build-type:          Simple
 -- extra-source-files:
 cabal-version:       >=1.10
 
-library 
+library
   -- main-is:
   -- other-modules:
   -- other-extensions:
   hs-source-dirs: src
   exposed-modules:
     Hailstorm.UserFormula
-    Hailstorm.Processors
+    Hailstorm.Clock
+    Hailstorm.Partition
+    Hailstorm.Payload
+    Hailstorm.Processor
+    Hailstorm.Processor.Runner
+    Hailstorm.Topology
+    Hailstorm.Sample.WordCountSample
+    Hailstorm.ZKCluster
   build-depends:
      base >=4.6
    , bytestring
