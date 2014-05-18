@@ -11,6 +11,7 @@ import Network.Simple.TCP
 import Network.Socket(socketToHandle)
 import Pipes
 import System.IO
+import qualified Hailstorm.Zookeeper as HSZK
 import qualified Data.ByteString as B
 import qualified Data.Map as Map
 
@@ -113,11 +114,13 @@ formulaConsumer uf = forever $ do
    payload <- await 
    lift $ outputFn uf (payloadTuple payload)
 
-runSink :: (Show k, Show v, Read k, Read v, Topology t) => (String, Int) ->  t -> UserFormula k v -> IO ()
-runSink (processorName, offset) topology uf =  
-    let (_, port) = addressFor topology (processorName, offset) in
-    serve HostAny port (\(s, _) -> accepted s)
-
+runSink :: (Show k, Show v, Read k, Read v, Topology t) => HSZK.ZKOptions -> (String, Int) ->  t -> UserFormula k v -> IO ()
+runSink zkOpts (processorName, offset) topology uf = do
+    let (_, port) = addressFor topology (processorName, offset)
+    HSZK.connectAndRegisterProcessor zkOpts processorName (\_ -> do
+            putStrLn $ "Registered " ++ processorName ++ " in Zookeeper"
+            serve HostAny port (\(s, _) -> accepted s)
+        )
     where accepted socket = 
             let sp = socketProducer uf socket
                 fc = formulaConsumer uf in
