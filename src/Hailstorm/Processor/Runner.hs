@@ -3,6 +3,7 @@
 module Hailstorm.Processor.Runner
 ( runSpoutFromProducer
 , runSink
+, runNegotiator
 ) where
 
 import Control.Monad

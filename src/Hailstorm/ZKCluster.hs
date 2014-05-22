@@ -3,7 +3,7 @@ module Hailstorm.ZKCluster
 , registerProcessor
 , initializeCluster
 , getStatus
-, chilrenWatchLoop
+, childrenWatchLoop
 ) where
 
 import Control.Concurrent
