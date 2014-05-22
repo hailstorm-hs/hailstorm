@@ -1,20 +1,25 @@
 module Hailstorm.ZKCluster
-( ZKOptions (..)
-, registerProcessor
-, initializeCluster
-, getStatus
+( MasterState(..)
+, ZKOptions (..)
 , childrenWatchLoop
+, createMasterState
+, getStatus
+, initializeCluster
+, registerProcessor
+, quietZK
 ) where
 
 import Control.Concurrent
 import Control.Monad
 import qualified Database.Zookeeper as ZK
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Char8 as C8
 
 type ProcessorId     = String
 type ProcessorAction = (ZK.Zookeeper -> IO ())
 data ZKOptions       = ZKOptions { connectionString :: String }
 
-data MasterState = Unavailable | SpoutPause | GreenLight
+data MasterState = Unavailable | Initialization | SpoutPause | GreenLight
     deriving (Eq, Read, Show)
 
 -- | Zookeeper node for living processors.
@@ -73,8 +78,22 @@ childrenWatchLoop zk path cb = do
               Left e -> putStrLn $ "Error in children watch loop from zookeeper: " ++ (show e)
               Right children -> cb children
 
-createMasterState :: ZK.Zookeeper -> IO (Either ZK.ZKError String)
-createMasterState zk = ZK.create zk zkMasterStateNode Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
+deserializeMasterState :: BS.ByteString -> MasterState
+deserializeMasterState = read . C8.unpack
+
+serializeMasterState :: MasterState -> BS.ByteString
+serializeMasterState = C8.pack . show 
+
+createMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError String)
+createMasterState zk ms = ZK.create zk zkMasterStateNode 
+                            (Just $ serializeMasterState ms) ZK.OpenAclUnsafe [ZK.Ephemeral]
+
+setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
+setMasterState zk ms = ZK.set zk zkMasterStateNode
+                        (Just $ serializeMasterState ms) Nothing
+
+quietZK :: IO ()
+quietZK = ZK.setDebugLevel ZK.ZLogWarn
 
 -- @withConnection opts action@ runs @action@, which takes a Zookeeper handler.
 withConnection :: ZKOptions -> (ZK.Zookeeper -> IO a) -> IO a

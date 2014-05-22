@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 wordCountFormula :: UserFormula String (Sum Int)
 wordCountFormula = newUserFormula
     (\x -> (C8.unpack x, Sum 1))
-    (\(k, v) -> print (k, v))
+    (\_ -> return ())
 
 wordCountTopology :: HardcodedTopology
 wordCountTopology = HardcodedTopology

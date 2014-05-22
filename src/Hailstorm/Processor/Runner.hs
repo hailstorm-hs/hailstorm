@@ -6,13 +6,15 @@ module Hailstorm.Processor.Runner
 , runNegotiator
 ) where
 
+import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
 import Data.List.Split
-import Hailstorm.UserFormula
 import Hailstorm.Clock
+import Hailstorm.Error
 import Hailstorm.Payload
 import Hailstorm.Topology
+import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import Network.Simple.TCP
 import Network.Socket(socketToHandle)
@@ -21,14 +23,19 @@ import System.IO
 import qualified Data.Map as Map
 
 runSpoutFromProducer :: (Show k, Show v, Topology t)
-                     => String
+                     => ZKOptions
+                     -> String
                      -> t
                      -> UserFormula k v
                      -> Producer (Payload k v) IO ()
                      -> IO ()
-runSpoutFromProducer spoutId topology uf producer =
-    let downstream = downstreamConsumer spoutId topology uf
-    in runEffect $ producer >-> downstream
+runSpoutFromProducer zkOpts spoutId  topology uf producer = do
+    registerProcessor zkOpts spoutId $ (\_ -> do
+            let downstream = downstreamConsumer spoutId topology uf
+            runEffect $ producer >-> downstream
+        )
+
+    throw $ ZookeeperConnectionError "Spout zookeeper registration terminated unexpectedly"
 
 runSink :: (Show k, Show v, Read k, Read v, Topology t)
         => ZKOptions
@@ -44,15 +51,26 @@ runSink opts (processorName, offset) topology uformula = do
     registerProcessor opts processorName $ \_ ->
         serve HostAny port $ \(s, _) -> accepted s
 
+    throw $ ZookeeperConnectionError "Sink zookeeper registration terminated unexpectedly"
+
 runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
 runNegotiator zkOpts topology = do
     registerProcessor zkOpts "negotiator" (\zk -> do
-            putStrLn $ "Registered negotiator in Zookeeper"
-            childrenWatchLoop zk "/living_processors" (\children -> do
-                    putStrLn $ "Children changed to " ++ (show children)
-                )
-        )
-    where 
+            me <- createMasterState zk Initialization
+            case me of 
+                Left e -> throw $ DuplicateNegotiatorError $
+                                  "Error setting negotiator master state... probable duplicate process: " ++ (show e)
+                Right _ -> watchLoop zk
+            )
+    throw $ ZookeeperConnectionError "Negotiator zookeeper registration terminated unexpectedly"
+
+    where watchLoop zk = childrenWatchLoop zk "/living_processors" $ \children -> do
+                putStrLn $ "Children changed to " ++ (show children)
+                let expectedRegistrations = numProcessors topology + 1
+                if length children < expectedRegistrations then
+                    putStrLn $ "Not enough children yet"
+                else
+                    putStrLn $ "Ready to initialize"
 
 formulaConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
 formulaConsumer uf = forever $ do

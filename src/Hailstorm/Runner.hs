@@ -15,6 +15,9 @@ import System.IO
 
 import qualified Data.Map as Map
 
+threadDead :: ThreadId -> IO Bool
+threadDead = fmap (\x -> x == ThreadDied || x == ThreadFinished) . threadStatus
+
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 localRunner :: (Topology t, Show t, Show k, Show v, Read k, Read v)
             => ZKOptions
@@ -25,21 +28,23 @@ localRunner :: (Topology t, Show t, Show k, Show v, Read k, Read v)
             -> String
             -> IO ()
 
-threadDead :: ThreadId -> IO Bool
-threadDead = fmap (\x -> x == ThreadDied || x == ThreadFinished) . threadStatus
-
 localRunner zkOpts topology formula filename ispout _ = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
+    quietZK
+
     putStrLn "Running in local mode..."
+
     negotiatorId <- forkOS $ runNegotiator zkOpts topology
     putStrLn $ "Spawned negotiator" ++ show negotiatorId
     threadDelay 1000000
+
     sinkId <- forkOS $ runSink zkOpts ("sink", 0) topology formula
     putStrLn $ "Spawned sink " ++ show sinkId
     threadDelay 1000000
+
     let f = partitionFromFile filename
-    spoutId <- forkOS $ runSpoutFromProducer ispout topology formula
+    spoutId <- forkOS $ runSpoutFromProducer zkOpts ispout topology formula
       (partitionToPayloadProducer formula f)
 
     let threadToName = Map.fromList [

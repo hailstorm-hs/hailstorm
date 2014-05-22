@@ -16,6 +16,8 @@ class Topology t where
     addressFor :: t
                -> (String, Int)
                -> ProcessorAddress
+    numProcessors :: t
+               -> Int
 
 type ProcessorHost = String
 type ProcessorPort = String
@@ -38,3 +40,9 @@ instance Topology HardcodedTopology where
 
     addressFor t (processorName, processorNumber) = fromJust $
         Map.lookup (processorName, processorNumber) (addresses t)
+
+    numProcessors (HardcodedTopology pmap _) = Map.fold (\p l -> l + case p of 
+            (Spout _ ps _) -> ps
+            (Bolt _ ps _) -> ps
+            (Sink _ ps) -> ps
+        ) 0 pmap 
