@@ -43,6 +43,15 @@ runSink opts (processorName, offset) topology uformula = do
     registerProcessor opts processorName $ \_ ->
         serve HostAny port $ \(s, _) -> accepted s
 
+runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
+runNegotiator zkOpts topology = do
+    registerProcessor zkOpts "negotiator" (\zk -> do
+            putStrLn $ "Registered negotiator in Zookeeper"
+            childrenWatchLoop zk "/living_processors" (\children -> do
+                    putStrLn $ "Children changed to " ++ (show children)
+                )
+        )
+
 formulaConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
 formulaConsumer uf = forever $ do
     payload <- await

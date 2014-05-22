@@ -40,8 +40,9 @@ library
    , containers
    , split
    , hzk
+   , unix
   default-language:    Haskell2010
-  ghc-options: -Wall
+  ghc-options: -Wall -threaded
 
 executable hailstorm
   hs-source-dirs: src
@@ -59,5 +60,7 @@ executable hailstorm
    , split
    , hzk
    , options
+   , unix
   Other-Modules: Hailstorm.UserFormula
   default-language: Haskell2010
+  ghc-options: -Wall -threaded

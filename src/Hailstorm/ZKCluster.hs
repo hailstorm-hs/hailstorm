@@ -3,8 +3,11 @@ module Hailstorm.ZKCluster
 , registerProcessor
 , initializeCluster
 , getStatus
+, chilrenWatchLoop
 ) where
 
+import Control.Concurrent
+import Control.Monad
 import qualified Database.Zookeeper as ZK
 
 type ProcessorId     = String
@@ -45,6 +48,23 @@ getStatus opts = withConnection opts $ \zk -> do
     case me of
         Left e  -> return $ "Error from zookeeper: " ++ show e
         Right p -> return $ "Living processors: " ++ show p
+
+childrenWatchLoop :: ZK.Zookeeper -> String -> ([String] -> IO ()) -> IO ()
+childrenWatchLoop zk path cb = do
+    childrenVar <- newMVar True
+    _ <- ZK.getChildren zk path (Just $ watcher childrenVar)
+    childLoop childrenVar
+
+    where watcher childrenVar _ _ _ _ = do
+            putStrLn $ "Watcher saw a node change"
+            putMVar childrenVar True
+
+          childLoop childrenVar = forever $ do
+            _ <- takeMVar childrenVar
+            me <- ZK.getChildren zk path (Just $ watcher childrenVar)
+            case me of
+              Left e -> putStrLn $ "Error in children watch loop from zookeeper: " ++ (show e)
+              Right children -> cb children
 
 -- @withConnection opts action@ runs @action@, which takes a Zookeeper handler.
 withConnection :: ZKOptions -> (ZK.Zookeeper -> IO a) -> IO a

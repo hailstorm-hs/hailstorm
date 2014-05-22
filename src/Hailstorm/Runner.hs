@@ -19,7 +19,10 @@ localRunner :: (Topology t, Show t, Show k, Show v, Read k, Read v)
             -> IO ()
 localRunner zkOpts topology formula filename ispout fsink = do
     putStrLn "Running in local mode..."
-    consumerId <- forkIO $ runSink zkOpts (fsink, 0) topology formula
+    negotiatorId <- forkOS $ runNegotiator zkOpts topology
+    putStrLn $ "Spawned negotiator" ++ show negotiatorId
+    threadDelay 1000000
+    consumerId <- forkOS $ runSink zkOpts ("sink", 0) topology formula
     putStrLn $ "Spawned sink " ++ show consumerId
     threadDelay 1000000
     let f = partitionFromFile filename
