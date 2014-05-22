@@ -27,6 +27,7 @@ library
     Hailstorm.Topology
     Hailstorm.Sample.WordCountSample
     Hailstorm.ZKCluster
+    Hailstorm.Runner
   build-depends:
      base >=4.6
    , bytestring
