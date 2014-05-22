@@ -17,7 +17,6 @@ import Hailstorm.Error
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Topology
-import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import Network.Simple.TCP
 import Network.Socket(socketToHandle)
@@ -35,12 +34,12 @@ runSpoutFromProducer :: (Show k, Show v, Topology t)
                      -> Producer (Payload k v) IO ()
                      -> IO ()
 runSpoutFromProducer zkOpts spoutId  topology uf producer = do
-    registerProcessor zkOpts spoutId $ (\_ -> do
-            let downstream = downstreamConsumer spoutId topology uf
-            runEffect $ producer >-> downstream
-        )
+    registerProcessor zkOpts spoutId $ \_ -> do
+        let downstream = downstreamConsumer spoutId topology uf
+        runEffect $ producer >-> downstream
 
-    throw $ ZookeeperConnectionError "Spout zookeeper registration terminated unexpectedly"
+    throw $ ZookeeperConnectionError
+        "Spout zookeeper registration terminated unexpectedly"
 
 runDownstream :: (Show k, Show v, Read k, Read v, Topology t)
               => ZKOptions
@@ -58,23 +57,30 @@ runDownstream opts (processorName, offset) topology uformula = do
     registerProcessor opts processorName $ \_ ->
         serve HostAny port $ \(s, _) -> accepted s
 
-    throw $ ZookeeperConnectionError "Sink zookeeper registration terminated unexpectedly"
+    throw $ ZookeeperConnectionError
+        "Sink zookeeper registration terminated unexpectedly"
 
 runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
 runNegotiator zkOpts topology = do
     registerProcessor zkOpts "negotiator" $ \zk ->
-        (forceEitherIO (DuplicateNegotiatorError "Could not set state, probable duplicate process") 
-            (createMasterState zk Initialization)) >> watchLoop zk
+        forceEitherIO
+            (DuplicateNegotiatorError
+                "Could not set state, probable duplicate process")
+            (createMasterState zk Initialization) >> watchLoop zk
 
-    throw $ ZookeeperConnectionError "Negotiator zookeeper registration terminated unexpectedly"
+    throw $ ZookeeperConnectionError
+        "Negotiator zookeeper registration terminated unexpectedly"
 
-    where watchLoop zk = childrenWatchLoop zk "/living_processors" $ \children -> do
-            putStrLn $ "Children changed to " ++ (show children)
-            let expectedRegistrations = numProcessors topology + 1
+  where
+    watchLoop zk = childrenWatchLoop zk "/living_processors" $ \children -> do
+      putStrLn $ "Children changed to " ++ show children
+      let expectedRegistrations = numProcessors topology + 1
 
-            if length children < expectedRegistrations then putStrLn $ "Not enough children yet"
-            else forceEitherIO UnknownWorkerException (setMasterState zk GreenLight)  
-                    >> (putStrLn $ "Master state set to green light")
+      if length children < expectedRegistrations
+        then putStrLn "Not enough children yet"
+        else forceEitherIO UnknownWorkerException
+            (setMasterState zk GreenLight)
+                >> putStrLn "Master state set to green light"
 
 -- | Builds a payload consumer using the provided UserFormula and based
 -- on the operation
@@ -128,6 +134,6 @@ downstreamConsumer processorId topology uf = dcInternal Map.empty
             dcInternal $ Map.union (Map.fromList newHandles) connectionPool
 
 consumerType :: Processor -> ConsumerType
-consumerType (Bolt _ _ _) = BoltConsumer
-consumerType (Sink _ _) = SinkConsumer
+consumerType Bolt{} = BoltConsumer
+consumerType Sink{} = SinkConsumer
 consumerType _ = error "Given processor is not a consumer"
