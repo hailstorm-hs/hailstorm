@@ -52,6 +52,7 @@ runNegotiator zkOpts topology = do
                     putStrLn $ "Children changed to " ++ (show children)
                 )
         )
+    where 
 
 formulaConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
 formulaConsumer uf = forever $ do

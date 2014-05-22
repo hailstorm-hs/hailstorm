@@ -14,9 +14,16 @@ type ProcessorId     = String
 type ProcessorAction = (ZK.Zookeeper -> IO ())
 data ZKOptions       = ZKOptions { connectionString :: String }
 
+data MasterState = Unavailable | SpoutPause | GreenLight
+    deriving (Eq, Read, Show)
+
 -- | Zookeeper node for living processors.
 zkLivingProcessorsNode :: String
 zkLivingProcessorsNode = "/living_processors"
+
+-- | Master state 
+zkMasterStateNode :: String
+zkMasterStateNode = "/master_state"
 
 -- | Timeout for Zookeeper connections.
 zkTimeout :: ZK.Timeout
@@ -65,6 +72,9 @@ childrenWatchLoop zk path cb = do
             case me of
               Left e -> putStrLn $ "Error in children watch loop from zookeeper: " ++ (show e)
               Right children -> cb children
+
+createMasterState :: ZK.Zookeeper -> IO (Either ZK.ZKError String)
+createMasterState zk = ZK.create zk zkMasterStateNode Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
 
 -- @withConnection opts action@ runs @action@, which takes a Zookeeper handler.
 withConnection :: ZKOptions -> (ZK.Zookeeper -> IO a) -> IO a

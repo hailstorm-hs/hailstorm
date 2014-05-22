@@ -18,16 +18,17 @@ library
   -- other-extensions:
   hs-source-dirs: src
   exposed-modules:
-    Hailstorm.UserFormula
     Hailstorm.Clock
+    Hailstorm.Error
     Hailstorm.Partition
     Hailstorm.Payload
     Hailstorm.Processor
     Hailstorm.Processor.Runner
-    Hailstorm.Topology
-    Hailstorm.Sample.WordCountSample
-    Hailstorm.ZKCluster
     Hailstorm.Runner
+    Hailstorm.Sample.WordCountSample
+    Hailstorm.Topology
+    Hailstorm.UserFormula
+    Hailstorm.ZKCluster
   build-depends:
      base >=4.6
    , bytestring
