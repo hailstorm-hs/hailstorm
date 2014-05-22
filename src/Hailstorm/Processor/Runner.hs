@@ -55,22 +55,19 @@ runSink opts (processorName, offset) topology uformula = do
 
 runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
 runNegotiator zkOpts topology = do
-    registerProcessor zkOpts "negotiator" (\zk -> do
-            me <- createMasterState zk Initialization
-            case me of 
-                Left e -> throw $ DuplicateNegotiatorError $
-                                  "Error setting negotiator master state... probable duplicate process: " ++ (show e)
-                Right _ -> watchLoop zk
-            )
+    registerProcessor zkOpts "negotiator" $ \zk ->
+        (forceEitherIO (DuplicateNegotiatorError "Could not set state, probable duplicate process") 
+            (createMasterState zk Initialization)) >> watchLoop zk
+
     throw $ ZookeeperConnectionError "Negotiator zookeeper registration terminated unexpectedly"
 
     where watchLoop zk = childrenWatchLoop zk "/living_processors" $ \children -> do
-                putStrLn $ "Children changed to " ++ (show children)
-                let expectedRegistrations = numProcessors topology + 1
-                if length children < expectedRegistrations then
-                    putStrLn $ "Not enough children yet"
-                else
-                    putStrLn $ "Ready to initialize"
+            putStrLn $ "Children changed to " ++ (show children)
+            let expectedRegistrations = numProcessors topology + 1
+
+            if length children < expectedRegistrations then putStrLn $ "Not enough children yet"
+            else forceEitherIO UnknownWorkerException (setMasterState zk GreenLight)  
+                    >> (putStrLn $ "Master state set to green light")
 
 formulaConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
 formulaConsumer uf = forever $ do

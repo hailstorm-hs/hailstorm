@@ -5,8 +5,9 @@ module Hailstorm.ZKCluster
 , createMasterState
 , getStatus
 , initializeCluster
-, registerProcessor
 , quietZK
+, registerProcessor
+, setMasterState
 ) where
 
 import Control.Concurrent
