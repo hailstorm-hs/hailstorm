@@ -19,12 +19,13 @@ threadDead :: ThreadId -> IO Bool
 threadDead = fmap (\x -> x == ThreadDied || x == ThreadFinished) . threadStatus
 
 -- TODO: this needs to be cleaned out. Currently hardcoded.
-localRunner :: (Topology t, Show t, Show k, Show v, Read k, Read v)
+-- TODO: I'm making this hardcoded topology-specific pending
+-- discussion of new interface method to add to Topology
+localRunner :: (Show k, Show v, Read k, Read v)
             => ZKOptions
-            -> t
+            -> HardcodedTopology
             -> UserFormula k v
             -> FilePath
-            -> String
             -> String
             -> IO ()
 
@@ -39,8 +40,12 @@ localRunner zkOpts topology formula filename ispout _ = do
     putStrLn $ "Spawned negotiator" ++ show negotiatorId
     threadDelay 1000000
 
-    sinkId <- forkOS $ runSink zkOpts ("sink", 0) topology formula
-    putStrLn $ "Spawned sink " ++ show sinkId
+    let runDownstreamThread processorTuple = do
+            consumerId <- forkOS $ runDownstream zkOpts processorTuple
+                topology formula
+            putStrLn $ "Spawned sink " ++ show consumerId
+            return consumerId
+    mapM_ runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
     let f = partitionFromFile filename

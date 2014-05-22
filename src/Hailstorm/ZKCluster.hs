@@ -45,7 +45,9 @@ registerProcessor opts processorId action =
         me <- ZK.create zk (zkLivingProcessorsNode ++ "/" ++ processorId)
             Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
         case me of
-            Left e  -> putStrLn $ "Error from zookeeper: "  ++ show e
+            Left e  -> putStrLn $
+                "Error (register " ++ processorId ++ ") from zookeeper: " ++
+                    show e
             Right _ -> do putStrLn $ "Added to zookeeper: " ++ processorId
                           action zk
 
@@ -53,14 +55,14 @@ initializeCluster :: ZKOptions -> IO ()
 initializeCluster opts = withConnection opts $ \zk -> do
     me <- ZK.create zk zkLivingProcessorsNode Nothing ZK.OpenAclUnsafe []
     case me of
-        Left e -> putStrLn $ "Error from zookeeper: " ++ show e
+        Left e -> putStrLn $ "Error (initialize) from zookeeper: " ++ show e
         Right _ -> return ()
 
 getStatus :: ZKOptions -> IO String
 getStatus opts = withConnection opts $ \zk -> do
     me <- ZK.getChildren zk zkLivingProcessorsNode Nothing
     case me of
-        Left e  -> return $ "Error from zookeeper: " ++ show e
+        Left e  -> return $ "Error (get status) from zookeeper: " ++ show e
         Right p -> return $ "Living processors: " ++ show p
 
 -- | Delivers children change events to the callback. Uses the same thread

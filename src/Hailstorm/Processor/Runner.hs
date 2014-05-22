@@ -2,7 +2,7 @@
 
 module Hailstorm.Processor.Runner
 ( runSpoutFromProducer
-, runSink
+, runDownstream
 , runNegotiator
 ) where
 
@@ -10,9 +10,12 @@ import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
 import Data.List.Split
+import Data.Maybe
+import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
 import Hailstorm.Payload
+import Hailstorm.Processor
 import Hailstorm.Topology
 import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
@@ -21,6 +24,8 @@ import Network.Socket(socketToHandle)
 import Pipes
 import System.IO
 import qualified Data.Map as Map
+
+data ConsumerType = BoltConsumer | SinkConsumer
 
 runSpoutFromProducer :: (Show k, Show v, Topology t)
                      => ZKOptions
@@ -37,16 +42,18 @@ runSpoutFromProducer zkOpts spoutId  topology uf producer = do
 
     throw $ ZookeeperConnectionError "Spout zookeeper registration terminated unexpectedly"
 
-runSink :: (Show k, Show v, Read k, Read v, Topology t)
-        => ZKOptions
-        -> (String, Int)
-        -> t
-        -> UserFormula k v
-        -> IO ()
-runSink opts (processorName, offset) topology uformula = do
+runDownstream :: (Show k, Show v, Read k, Read v, Topology t)
+              => ZKOptions
+              -> (String, Int)
+              -> t
+              -> UserFormula k v
+              -> IO ()
+runDownstream opts (processorName, offset) topology uformula = do
     let (_, port) = addressFor topology (processorName, offset)
+        ctype = consumerType (fromJust $
+            Map.lookup processorName (processors topology))
         accepted socket = let sp = socketProducer uformula socket
-                              fc = formulaConsumer uformula
+                              fc = formulaConsumer uformula ctype
                           in runEffect $ sp >-> fc
     registerProcessor opts processorName $ \_ ->
         serve HostAny port $ \(s, _) -> accepted s
@@ -69,10 +76,16 @@ runNegotiator zkOpts topology = do
             else forceEitherIO UnknownWorkerException (setMasterState zk GreenLight)  
                     >> (putStrLn $ "Master state set to green light")
 
-formulaConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
-formulaConsumer uf = forever $ do
+-- | Builds a payload consumer using the provided UserFormula and based
+-- on the operation
+formulaConsumer :: UserFormula k v
+                -> ConsumerType
+                -> Consumer (Payload k v) IO ()
+formulaConsumer uf tconsumer = forever $ do
     payload <- await
-    lift $ outputFn uf (payloadTuple payload)
+    case tconsumer of
+      BoltConsumer -> lift $ outputFn uf (payloadTuple payload)
+      SinkConsumer -> lift $ outputFn uf (payloadTuple payload)
 
 socketProducer :: (Read k, Read v)
                => UserFormula k v
@@ -104,6 +117,7 @@ downstreamConsumer :: (Show k, Show v, Topology t)
 downstreamConsumer processorId topology uf = dcInternal Map.empty
     where dcInternal connectionPool = do
             payload <- await
+            -- TODO: figure out what payload actually is
             let sendAddresses = downstreamAddresses topology processorId payload
                 addressToHandle (host, port) = do
                     h <- lift $ poolConnect (host, port) connectionPool
@@ -112,3 +126,8 @@ downstreamConsumer processorId topology uf = dcInternal Map.empty
                     return ((host, port), h)
             newHandles <- mapM addressToHandle sendAddresses
             dcInternal $ Map.union (Map.fromList newHandles) connectionPool
+
+consumerType :: Processor -> ConsumerType
+consumerType (Bolt _ _ _) = BoltConsumer
+consumerType (Sink _ _) = SinkConsumer
+consumerType _ = error "Given processor is not a consumer"

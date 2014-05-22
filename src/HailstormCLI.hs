@@ -41,7 +41,7 @@ runSample mainOpts _ _ = do
     -- symlink hailstorm too)
     home <- getEnv "HOME"
     HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
-        wordCountFormula  (home </> "test.txt") "words" "sink"
+        wordCountFormula  (home </> "test.txt") "words"
 
 -- | Main entry point.
 main :: IO ()
