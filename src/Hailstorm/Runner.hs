@@ -28,8 +28,7 @@ localRunner :: (Show k, Show v, Read k, Read v)
             -> FilePath
             -> String
             -> IO ()
-
-localRunner zkOpts topology formula filename ispout _ = do
+localRunner zkOpts topology formula filename ispout = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     quietZK
@@ -45,24 +44,22 @@ localRunner zkOpts topology formula filename ispout _ = do
                 topology formula
             putStrLn $ "Spawned sink " ++ show consumerId
             return consumerId
-    mapM_ runDownstreamThread $ (Map.keys . addresses) topology
+    consumerIds <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
     let f = partitionFromFile filename
     spoutId <- forkOS $ runSpoutFromProducer zkOpts ispout topology formula
       (partitionToPayloadProducer formula f)
 
-    let threadToName = Map.fromList [
-                     (negotiatorId, "Negotiator")
-                   , (spoutId, "Spout")
-                   , (sinkId, "Sink")
-                   ]
+    let baseThreads = [(negotiatorId, "Negotiator"), (spoutId, "Spout")]
+        consumerThreads = map (\tid -> (tid, show tid)) consumerIds
+        threadToName = Map.fromList $ baseThreads ++ consumerThreads
 
     forever $ do 
         mapM_ (\tid -> do
                 dead <- threadDead tid
                 when dead $ do
-                    hPutStrLn stderr $ (fromJust $ Map.lookup tid threadToName) ++ " thread terminated... shutting down"
+                    hPutStrLn stderr $ fromJust (Map.lookup tid threadToName) ++ " thread terminated... shutting down"
                     exitWith $ ExitFailure 1
               ) (Map.keys threadToName)
         threadDelay $ 1000 * 1000
