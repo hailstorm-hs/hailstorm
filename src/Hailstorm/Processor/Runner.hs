@@ -6,6 +6,7 @@ module Hailstorm.Processor.Runner
 , runNegotiator
 ) where
 
+import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
@@ -26,6 +27,14 @@ import qualified Data.Map as Map
 
 data ConsumerType = BoltConsumer | SinkConsumer
 
+
+
+spoutStatePipe :: MVar MasterState -> Pipe (Payload k v) (Payload k v) IO ()
+spoutStatePipe stateMVar = forever $ do
+    _ <- lift $ readMVar stateMVar
+    tuple <- await
+    yield tuple
+
 runSpoutFromProducer :: (Show k, Show v, Topology t)
                      => ZKOptions
                      -> String
@@ -34,12 +43,25 @@ runSpoutFromProducer :: (Show k, Show v, Topology t)
                      -> Producer (Payload k v) IO ()
                      -> IO ()
 runSpoutFromProducer zkOpts spoutId  topology uf producer = do
-    registerProcessor zkOpts spoutId $ \_ -> do
-        let downstream = downstreamConsumer spoutId topology uf
-        runEffect $ producer >-> downstream
+    registerProcessor zkOpts spoutId $ \zk -> do
+        stateMVar <- newEmptyMVar
+        _ <- forkOS $ pipeThread stateMVar
+
+        monitorMasterState zk $ \et -> case et of
+            (Left e) -> throw $ wrapInHSError e UnexpectedZookeeperError
+            (Right ms) -> do 
+                putStrLn $ "Spout: detected master state change to " ++ show ms
+                tryTakeMVar stateMVar >> putMVar stateMVar ms -- Overwrite
 
     throw $ ZookeeperConnectionError
         "Spout zookeeper registration terminated unexpectedly"
+
+    
+    where pipeThread stateMVar = let downstream = downstreamConsumer spoutId topology uf in 
+                       runEffect $ producer >-> spoutStatePipe stateMVar >-> downstream
+            
+
+        
 
 runDownstream :: (Show k, Show v, Read k, Read v, Topology t)
               => ZKOptions
