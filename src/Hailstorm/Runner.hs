@@ -48,7 +48,7 @@ localRunner zkOpts topology formula filename ispout = do
     threadDelay 1000000
 
     let f = partitionFromFile filename
-    spoutId <- forkOS $ runSpoutFromProducer zkOpts ispout topology formula
+    spoutId <- forkOS $ runSpoutFromProducer zkOpts (ispout, 0) topology formula
       (partitionToPayloadProducer formula f)
 
     let baseThreads = [(negotiatorId, "Negotiator"), (spoutId, "Spout")]

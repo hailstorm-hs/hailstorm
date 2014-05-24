@@ -1,7 +1,6 @@
 module Hailstorm.Topology
 ( Topology(..)
 , HardcodedTopology(..)
-, ProcessorThreadIndex
 ) where
 
 import Data.Maybe
@@ -13,23 +12,22 @@ class Topology t where
     processors :: t
                -> Map.Map String Processor
     downstreamAddresses :: t
-                        -> String
+                        -> ProcessorName
                         -> Payload k v
                         -> [ProcessorAddress]
     addressFor :: t
-               -> ProcessorThreadIndex
+               -> ProcessorId
                -> ProcessorAddress
     numProcessors :: t
                   -> Int
 
-type ProcessorThreadIndex = (String, Int)
 type ProcessorHost = String
 type ProcessorPort = String
 type ProcessorAddress = (ProcessorHost, ProcessorPort)
 
 data HardcodedTopology = HardcodedTopology
     { processorMap :: Map.Map String Processor
-    , addresses :: Map.Map ProcessorThreadIndex ProcessorAddress
+    , addresses :: Map.Map ProcessorId ProcessorAddress
     } deriving (Eq, Show, Read)
 
 instance Topology HardcodedTopology where

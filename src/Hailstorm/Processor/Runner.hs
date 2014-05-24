@@ -41,13 +41,13 @@ spoutStatePipe stateMVar = forever $ do
 
 runSpoutFromProducer :: (Show k, Show v, Topology t)
                      => ZKOptions
-                     -> String
+                     -> ProcessorId
                      -> t
                      -> UserFormula k v
                      -> Producer (Payload k v) IO ()
                      -> IO ()
-runSpoutFromProducer zkOpts spoutId  topology uf producer = do
-    registerProcessor zkOpts spoutId $ \zk -> do
+runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
+    registerProcessor zkOpts sid $ \zk -> do
         stateMVar <- newEmptyMVar
         _ <- forkOS $ pipeThread stateMVar
 
@@ -61,7 +61,7 @@ runSpoutFromProducer zkOpts spoutId  topology uf producer = do
         "Spout zookeeper registration terminated unexpectedly"
 
     
-    where pipeThread stateMVar = let downstream = downstreamConsumer spoutId topology uf in 
+    where pipeThread stateMVar = let downstream = downstreamConsumer sname topology uf in 
                        runEffect $ producer >-> spoutStatePipe stateMVar >-> downstream
             
 
@@ -69,26 +69,24 @@ runSpoutFromProducer zkOpts spoutId  topology uf producer = do
 
 runDownstream :: (Show k, Show v, Read k, Read v, Topology t)
               => ZKOptions
-              -> (String, Int)
+              -> ProcessorId
               -> t
               -> UserFormula k v
               -> IO ()
-runDownstream opts (processorName, offset) topology uformula = do
-    let (_, port) = addressFor topology (processorName, offset)
-        ctype = consumerType (fromJust $
-            Map.lookup processorName (processors topology))
+runDownstream opts did@(dname, _) topology uformula = do
+    let (_, port) = addressFor topology did
+        ctype = consumerType (fromJust $ Map.lookup dname (processors topology))
         accepted socket = let sp = socketProducer uformula socket
                               fc = formulaConsumer uformula ctype
                           in runEffect $ sp >-> fc
-    registerProcessor opts processorName $ \_ ->
-        serve HostAny port $ \(s, _) -> accepted s
+    registerProcessor opts did $ const $ serve HostAny port $ \(s, _) -> accepted s
 
     throw $ ZookeeperConnectionError
         "Sink zookeeper registration terminated unexpectedly"
 
 runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
 runNegotiator zkOpts topology = do
-    registerProcessor zkOpts "negotiator" $ \zk ->
+    registerProcessor zkOpts ("negotiator", 0) $ \zk ->
         forceEitherIO
             (DuplicateNegotiatorError
                 "Could not set state, probable duplicate process")
@@ -145,15 +143,14 @@ poolConnect (host, port) m = case Map.lookup (host, port) m of
     Nothing -> connect host port (\(s, _) -> socketToHandle s WriteMode)
 
 downstreamConsumer :: (Show k, Show v, Topology t)
-                   => String
+                   => ProcessorName
                    -> t
                    -> UserFormula k v
                    -> Consumer (Payload k v) IO ()
-downstreamConsumer processorId topology uf = dcInternal Map.empty
+downstreamConsumer processorName topology uf = dcInternal Map.empty
     where dcInternal connectionPool = do
             payload <- await
-            -- TODO: figure out what payload actually is
-            let sendAddresses = downstreamAddresses topology processorId payload
+            let sendAddresses = downstreamAddresses topology processorName payload
                 addressToHandle (host, port) = do
                     h <- lift $ poolConnect (host, port) connectionPool
                     lift $ hPutStrLn h (serialize uf (payloadTuple payload) ++

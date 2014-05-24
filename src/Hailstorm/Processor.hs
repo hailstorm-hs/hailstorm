@@ -1,23 +1,29 @@
 module Hailstorm.Processor
 ( Processor(..)
+, ProcessorName
+, ProcessorInstance
+, ProcessorId
 , mkProcessorMap
 ) where
 
 import qualified Data.Map as Map
 
-type ProcessorId = String
-data Processor = Spout { name :: ProcessorId
+type ProcessorInstance = Int
+type ProcessorName = String
+type ProcessorId = (ProcessorName, ProcessorInstance)
+
+data Processor = Spout { name :: ProcessorName
                        , parallelism :: Int
-                       , downstreams :: [ProcessorId]
+                       , downstreams :: [ProcessorName]
                        }
-               | Bolt  { name :: ProcessorId
+               | Bolt  { name :: ProcessorName
                        , parallelism :: Int
-                       , downstremas :: [ProcessorId]
+                       , downstreams :: [ProcessorName]
                        }
-               | Sink  { name :: ProcessorId
+               | Sink  { name :: ProcessorName
                        , parallelism :: Int
                        }
                  deriving (Eq, Show, Read)
 
-mkProcessorMap :: [Processor] -> Map.Map ProcessorId Processor
+mkProcessorMap :: [Processor] -> Map.Map ProcessorName Processor
 mkProcessorMap = Map.fromList . map (\x -> (name x, x))

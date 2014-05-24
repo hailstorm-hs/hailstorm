@@ -13,11 +13,11 @@ module Hailstorm.ZKCluster
 
 import Control.Concurrent
 import Control.Monad
+import Hailstorm.Processor
 import qualified Database.Zookeeper as ZK
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
 
-type ProcessorId     = String
 type ProcessorAction = (ZK.Zookeeper -> IO ())
 data ZKOptions       = ZKOptions { connectionString :: String }
 
@@ -40,15 +40,16 @@ registerProcessor :: ZKOptions
                   -> ProcessorId
                   -> ProcessorAction
                   -> IO ()
-registerProcessor opts processorId action =
+registerProcessor opts p@(pname, pinstance) action =
     withConnection opts $ \zk -> do
-        me <- ZK.create zk (zkLivingProcessorsNode ++ "/" ++ processorId)
+        me <- ZK.create zk (zkLivingProcessorsNode ++ "/" ++ pname ++ "-" ++ show pinstance)
+
             Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
         case me of
             Left e  -> putStrLn $
-                "Error (register " ++ processorId ++ ") from zookeeper: " ++
+                "Error (register " ++ show p ++ ") from zookeeper: " ++
                     show e
-            Right _ -> do putStrLn $ "Added to zookeeper: " ++ processorId
+            Right _ -> do putStrLn $ "Added to zookeeper: " ++ show p
                           action zk
 
 initializeCluster :: ZKOptions -> IO ()
