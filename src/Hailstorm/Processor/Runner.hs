@@ -31,9 +31,13 @@ data ConsumerType = BoltConsumer | SinkConsumer
 
 spoutStatePipe :: MVar MasterState -> Pipe (Payload k v) (Payload k v) IO ()
 spoutStatePipe stateMVar = forever $ do
-    _ <- lift $ readMVar stateMVar
-    tuple <- await
-    yield tuple
+    ms <- lift $ readMVar stateMVar
+    case ms of 
+        GreenLight -> passOn
+        _ -> do
+            lift $ putStrLn $ "Spout waiting green light... master state=" ++ show ms
+            lift $ threadDelay $ 1000 * 1000 * 10
+    where passOn = await >>= yield
 
 runSpoutFromProducer :: (Show k, Show v, Topology t)
                      => ZKOptions
@@ -100,9 +104,12 @@ runNegotiator zkOpts topology = do
 
       if length children < expectedRegistrations
         then putStrLn "Not enough children yet"
-        else forceEitherIO UnknownWorkerException
-            (setMasterState zk GreenLight)
-                >> putStrLn "Master state set to green light"
+        else do
+            _ <- forceEitherIO UnknownWorkerException (setMasterState zk Initialization)
+            threadDelay $ 2 * 1000 * 1000
+            _ <- forceEitherIO UnknownWorkerException (setMasterState zk GreenLight)
+            putStrLn "Master state set to green light"
+
 
 -- | Builds a payload consumer using the provided UserFormula and based
 -- on the operation

@@ -95,8 +95,7 @@ monitorMasterState zk cb = do
     where watcher mVar _ _ _ _ = putMVar mVar True
           monitorLoop mVar lastState = do
             _ <- takeMVar mVar
-            me <- ZK.get zk zkMasterStateNode Nothing
-
+            me <- ZK.get zk zkMasterStateNode (Just $ watcher mVar)
             case me of 
                 (Left e) -> cb (Left e) >> monitorLoop mVar lastState
                 (Right (Just s, _)) -> do
