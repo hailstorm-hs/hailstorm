@@ -3,7 +3,9 @@
 **CS240h final project, Spring 2014**
 
 ## Reference
-https://github.com/jasonjckn/essays/blob/master/exactly_once_semantics.md
+Storm tutorial: http://storm.incubator.apache.org/documentation/Tutorial.html
+
+Exactly-once processing: https://github.com/jasonjckn/essays/blob/master/exactly_once_semantics.md
 
 ## Dependencies
 Hailstorm requires Apache Zookeeper to run. On OSX, use homebrew and then install hzk

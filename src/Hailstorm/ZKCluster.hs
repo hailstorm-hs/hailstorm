@@ -24,13 +24,17 @@ data ZKOptions       = ZKOptions { connectionString :: String }
 data MasterState = Unavailable | Initialization | SpoutPause | GreenLight
     deriving (Eq, Read, Show)
 
+-- | Master state Zookeeper node
+zkMasterStateNode :: String
+zkMasterStateNode = "/master_state"
+
 -- | Zookeeper node for living processors.
 zkLivingProcessorsNode :: String
 zkLivingProcessorsNode = "/living_processors"
 
--- | Master state 
-zkMasterStateNode :: String
-zkMasterStateNode = "/master_state"
+-- | Zookeeper node for a single processor
+zkProcessorNode :: ProcessorId -> String
+zkProcessorNode (pname, pinstance) = zkLivingProcessorsNode ++ "/" ++ pname ++ "-" ++ show pinstance
 
 -- | Timeout for Zookeeper connections.
 zkTimeout :: ZK.Timeout
@@ -40,16 +44,13 @@ registerProcessor :: ZKOptions
                   -> ProcessorId
                   -> ProcessorAction
                   -> IO ()
-registerProcessor opts p@(pname, pinstance) action =
+registerProcessor opts pid action =
     withConnection opts $ \zk -> do
-        me <- ZK.create zk (zkLivingProcessorsNode ++ "/" ++ pname ++ "-" ++ show pinstance)
-
-            Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
+        me <- ZK.create zk (zkProcessorNode pid) Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
         case me of
             Left e  -> putStrLn $
-                "Error (register " ++ show p ++ ") from zookeeper: " ++
-                    show e
-            Right _ -> do putStrLn $ "Added to zookeeper: " ++ show p
+                "Error (register " ++ show pid ++ ") from zookeeper: " ++ show e
+            Right _ -> do putStrLn $ "Added to zookeeper: " ++ show pid
                           action zk
 
 initializeCluster :: ZKOptions -> IO ()
