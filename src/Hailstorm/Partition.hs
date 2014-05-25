@@ -1,5 +1,7 @@
 module Hailstorm.Partition
 ( PartitionOffset(..)
+, Partition
+, Offset
 , partitionFromFile
 ) where
 
@@ -8,8 +10,11 @@ import Pipes
 import System.IO
 import qualified Data.ByteString as B
 
+type Offset = Integer
+type Partition = String 
+
 -- | An offset into a data partition.
-data PartitionOffset = PartitionOffset B.ByteString String Integer
+data PartitionOffset = PartitionOffset B.ByteString Partition Offset
                        deriving (Eq, Show, Read)
 
 -- | Creates a data partition from a given filesystem path. The returned

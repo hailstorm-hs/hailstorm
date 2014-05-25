@@ -42,6 +42,8 @@ library
    , split
    , hzk
    , unix
+   , transformers
+   , either
   default-language:    Haskell2010
   ghc-options: -Wall -threaded
 

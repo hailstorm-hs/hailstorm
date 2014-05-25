@@ -12,6 +12,7 @@ import Control.Monad
 import Data.ByteString.Char8 ()
 import Data.List.Split
 import Data.Maybe
+import Data.IORef
 import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
@@ -24,16 +25,34 @@ import Network.Socket(socketToHandle)
 import Pipes
 import System.IO
 import qualified Data.Map as Map
+import qualified Data.Foldable as Foldable
+import qualified Database.Zookeeper as ZK
 
 data ConsumerType = BoltConsumer | SinkConsumer
 
+debugSetMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
+debugSetMasterState zk ms = do
+    r <- setMasterState zk ms
+    putStrLn $ "Master state set to " ++ (show ms)
+    return r
 
+pauseUntilGreen :: MVar MasterState -> IO ()
+pauseUntilGreen stateMVar = do
+    ms <- readMVar stateMVar
+    case ms of 
+        GreenLight _ -> return ()
+        _ -> threadDelay (1000 * 1000 * 1) >> pauseUntilGreen stateMVar
 
-spoutStatePipe :: MVar MasterState -> Pipe (Payload k v) (Payload k v) IO ()
-spoutStatePipe stateMVar = forever $ do
+spoutStatePipe :: ZK.Zookeeper -> ProcessorId -> MVar MasterState -> Pipe (Payload k v) (Payload k v) IO ()
+spoutStatePipe zk sid stateMVar = forever $ do
     ms <- lift $ readMVar stateMVar
     case ms of 
-        GreenLight -> passOn
+        GreenLight _ -> passOn
+        SpoutPause ->  do
+            _ <- lift $ forceEitherIO UnknownWorkerException (setProcessorState zk sid (SpoutPaused "fun" 0))
+            lift $ pauseUntilGreen stateMVar
+            _ <- lift $ forceEitherIO UnknownWorkerException (setProcessorState zk sid SpoutRunning)
+            return ()
         _ -> do
             lift $ putStrLn $ "Spout waiting green light... master state=" ++ show ms
             lift $ threadDelay $ 1000 * 1000 * 10
@@ -47,9 +66,9 @@ runSpoutFromProducer :: (Show k, Show v, Topology t)
                      -> Producer (Payload k v) IO ()
                      -> IO ()
 runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
-    registerProcessor zkOpts sid $ \zk -> do
+    registerProcessor zkOpts sid SpoutRunning $ \zk -> do
         stateMVar <- newEmptyMVar
-        _ <- forkOS $ pipeThread stateMVar
+        _ <- forkOS $ pipeThread zk stateMVar
 
         monitorMasterState zk $ \et -> case et of
             (Left e) -> throw $ wrapInHSError e UnexpectedZookeeperError
@@ -61,8 +80,8 @@ runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
         "Spout zookeeper registration terminated unexpectedly"
 
     
-    where pipeThread stateMVar = let downstream = downstreamConsumer sname topology uf in 
-                       runEffect $ producer >-> spoutStatePipe stateMVar >-> downstream
+    where pipeThread zk stateMVar = let downstream = downstreamConsumer sname topology uf in 
+                       runEffect $ producer >-> spoutStatePipe zk sid stateMVar >-> downstream
             
 
         
@@ -79,34 +98,67 @@ runDownstream opts did@(dname, _) topology uformula = do
         accepted socket = let sp = socketProducer uformula socket
                               fc = formulaConsumer uformula ctype
                           in runEffect $ sp >-> fc
-    registerProcessor opts did $ const $ serve HostAny port $ \(s, _) -> accepted s
+    registerProcessor opts did SinkRunning $ const $ serve HostAny port $ \(s, _) -> accepted s
 
     throw $ ZookeeperConnectionError
         "Sink zookeeper registration terminated unexpectedly"
 
+killFromRef :: IORef (Maybe ThreadId) -> IO ()
+killFromRef ioRef = do
+    mt <- readIORef ioRef
+    Foldable.forM_ mt killThread
+
+
+waitUntilSnapshotsComplete :: (Topology t) => ZK.Zookeeper -> t -> IO ()
+waitUntilSnapshotsComplete _ _ = return ()
+
+negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
+negotiateSnapshot zk t = do
+    _ <- forceEitherIO UnknownWorkerException (debugSetMasterState zk SpoutPause)
+    offsetsAndPartitions <- untilSpoutsPaused
+    return $ Clock (Map.fromList offsetsAndPartitions)
+
+    where untilSpoutsPaused = do
+            stateMap <- forceEitherIO UnknownWorkerException (getAllProcessorStates zk)
+            let spoutStates = map (\k -> fromJust $ Map.lookup k stateMap) (spoutIds t)
+            let spoutsPaused = [(p,o) | (SpoutPaused p o) <- spoutStates]
+            if length spoutsPaused == length spoutStates then return spoutsPaused
+                else untilSpoutsPaused
+
 runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
 runNegotiator zkOpts topology = do
-    registerProcessor zkOpts ("negotiator", 0) $ \zk ->
+    fullChildrenThreadId <- newIORef (Nothing :: Maybe ThreadId)
+    registerProcessor zkOpts ("negotiator", 0) UnspecifiedState $ \zk ->
         forceEitherIO
             (DuplicateNegotiatorError
                 "Could not set state, probable duplicate process")
-            (createMasterState zk Initialization) >> watchLoop zk
+            (createMasterState zk Initialization) >> watchLoop zk fullChildrenThreadId
 
     throw $ ZookeeperConnectionError
         "Negotiator zookeeper registration terminated unexpectedly"
 
   where
-    watchLoop zk = childrenWatchLoop zk "/living_processors" $ \children -> do
+    fullThread zk = forever $ do
+        waitUntilSnapshotsComplete zk topology
+        threadDelay $ 1000 * 1000 * 5
+        nextSnapshotClock <- negotiateSnapshot zk topology 
+        _ <- forceEitherIO UnknownWorkerException (debugSetMasterState zk (GreenLight nextSnapshotClock))
+        putStrLn "Master state set to green light"
+        
+    watchLoop zk fullThreadId = childrenWatchLoop zk "/living_processors" $ \children -> do
+      killFromRef fullThreadId       
+
       putStrLn $ "Children changed to " ++ show children
       let expectedRegistrations = numProcessors topology + 1
 
       if length children < expectedRegistrations
-        then putStrLn "Not enough children yet"
+        then do
+            putStrLn "Not enough children"
+            _ <- forceEitherIO UnexpectedZookeeperError (debugSetMasterState zk Unavailable)
+            return ()
         else do
-            _ <- forceEitherIO UnknownWorkerException (setMasterState zk Initialization)
-            threadDelay $ 2 * 1000 * 1000
-            _ <- forceEitherIO UnknownWorkerException (setMasterState zk GreenLight)
-            putStrLn "Master state set to green light"
+            tid <- forkOS $ fullThread zk
+            writeIORef fullThreadId $ Just tid
 
 
 -- | Builds a payload consumer using the provided UserFormula and based

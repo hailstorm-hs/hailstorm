@@ -1,6 +1,7 @@
 module Hailstorm.Topology
 ( Topology(..)
 , HardcodedTopology(..)
+, spoutIds
 ) where
 
 import Data.Maybe
@@ -50,3 +51,7 @@ instance Topology HardcodedTopology where
         ) 0 pmap
 
     processors = processorMap
+
+
+spoutIds :: (Topology t) => t -> [ProcessorId]
+spoutIds t = [(n,c) | (_, Spout n p _) <- Map.toList (processors t), c <- [0..(p-1)]]

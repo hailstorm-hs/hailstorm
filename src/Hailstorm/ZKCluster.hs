@@ -9,19 +9,27 @@ module Hailstorm.ZKCluster
 , quietZK
 , registerProcessor
 , setMasterState
+, setProcessorState
+, getProcessorState
+, getAllProcessorStates
 ) where
 
 import Control.Concurrent
 import Control.Monad
+import Hailstorm.Clock
 import Hailstorm.Processor
+import Data.Either
+import Data.List.Split
+import Data.Map (Map)
 import qualified Database.Zookeeper as ZK
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
+import qualified Data.Map as Map
 
 type ProcessorAction = (ZK.Zookeeper -> IO ())
 data ZKOptions       = ZKOptions { connectionString :: String }
 
-data MasterState = Unavailable | Initialization | SpoutPause | GreenLight
+data MasterState = Unavailable | Initialization | SpoutPause | GreenLight Clock
     deriving (Eq, Read, Show)
 
 -- | Master state Zookeeper node
@@ -36,17 +44,24 @@ zkLivingProcessorsNode = "/living_processors"
 zkProcessorNode :: ProcessorId -> String
 zkProcessorNode (pname, pinstance) = zkLivingProcessorsNode ++ "/" ++ pname ++ "-" ++ show pinstance
 
+processorNodeToId :: String -> ProcessorId
+processorNodeToId s = case splitOn "-" s of
+    [pname, pinstance] -> (pname, read pinstance)
+    _ -> error $ "Unexpected processor name " ++ s
+
 -- | Timeout for Zookeeper connections.
 zkTimeout :: ZK.Timeout
 zkTimeout = 10000
 
 registerProcessor :: ZKOptions
                   -> ProcessorId
+                  -> ProcessorState 
                   -> ProcessorAction
                   -> IO ()
-registerProcessor opts pid action =
+registerProcessor opts pid initialState action =
     withConnection opts $ \zk -> do
-        me <- ZK.create zk (zkProcessorNode pid) Nothing ZK.OpenAclUnsafe [ZK.Ephemeral]
+        me <- ZK.create zk (zkProcessorNode pid) (Just $ serializeProcessorState initialState) 
+                  ZK.OpenAclUnsafe [ZK.Ephemeral]
         case me of
             Left e  -> putStrLn $
                 "Error (register " ++ show pid ++ ") from zookeeper: " ++ show e
@@ -119,6 +134,41 @@ createMasterState zk ms = ZK.create zk zkMasterStateNode
 setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
 setMasterState zk ms = ZK.set zk zkMasterStateNode
                         (Just $ serializeMasterState ms) Nothing
+
+deserializeProcessorState :: BS.ByteString -> ProcessorState
+deserializeProcessorState = read . C8.unpack
+
+serializeProcessorState :: ProcessorState -> BS.ByteString
+serializeProcessorState = C8.pack . show
+
+setProcessorState :: ZK.Zookeeper
+                  -> ProcessorId
+                  -> ProcessorState
+                  -> IO (Either ZK.ZKError ZK.Stat)
+setProcessorState zk pid pstate =  ZK.set zk (zkProcessorNode pid) (Just $ serializeProcessorState pstate) Nothing
+                  
+getProcessorState :: ZK.Zookeeper
+                  -> ProcessorId
+                  -> IO (Either ZK.ZKError ProcessorState)
+getProcessorState zk pid = do
+    me <- ZK.get zk (zkProcessorNode pid) Nothing
+    return $ case me of 
+        (Left e) -> Left e
+        (Right (Just s, _)) -> Right $ deserializeProcessorState s
+        _ -> Left ZK.NothingError
+
+getAllProcessorStates :: ZK.Zookeeper -> IO (Either ZK.ZKError (Map ProcessorId ProcessorState))
+getAllProcessorStates zk = do
+    childrenEt <- ZK.getChildren zk zkLivingProcessorsNode Nothing
+    case childrenEt of 
+        (Left e) -> return $ Left e
+        (Right children) -> do
+            let pids = map processorNodeToId children
+            ets <- mapM (getProcessorState zk) pids
+            case lefts ets of
+                l:_ -> return $ Left l
+                [] -> return $ Right (Map.fromList $ zip pids (rights ets))
+
 
 quietZK :: IO ()
 quietZK = ZK.setDebugLevel ZK.ZLogWarn
