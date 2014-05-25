@@ -143,7 +143,7 @@ runNegotiator zkOpts topology = do
         threadDelay $ 1000 * 1000 * 5
         nextSnapshotClock <- negotiateSnapshot zk topology 
         _ <- forceEitherIO UnknownWorkerException (debugSetMasterState zk (GreenLight nextSnapshotClock))
-        mzero
+        return ()
         
     watchLoop zk fullThreadId = childrenWatchLoop zk "/living_processors" $ \children -> do
       killFromRef fullThreadId       
