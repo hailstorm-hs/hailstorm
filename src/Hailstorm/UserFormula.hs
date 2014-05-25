@@ -6,7 +6,10 @@ import qualified Data.ByteString as B
 
 -- | A formula for stream computation over key-value tuples. Keys @k@ must
 -- be of instances of Ord and values @v@ must be instances of Monoid.
-data UserFormula k v = (Ord k, Monoid v) => UserFormula
+-- TODO: once serialize and deserialize no longer use Show/Read, remove
+-- Show/Read restriction on k and v.
+data UserFormula k v = (Show k, Show v, Read k, Read v, Ord k, Monoid v) =>
+  UserFormula
   { convertFn :: B.ByteString -> (k,v)
   , outputFn  :: (k,v) -> IO ()
   , serialize :: (k,v) -> String

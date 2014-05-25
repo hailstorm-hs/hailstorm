@@ -23,7 +23,7 @@ wordCountTopology = HardcodedTopology
   {
       processorMap = mkProcessorMap
       [ Spout "words" 1 ["count"]
-      , Bolt  "count" 1 ["sink"]
+      , Bolt "count" 1 ["sink"]
       , Sink "sink" 1
       ]
       , addresses = Map.fromList

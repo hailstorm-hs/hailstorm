@@ -13,6 +13,7 @@ import Data.ByteString.Char8 ()
 import Data.List.Split
 import Data.Maybe
 import Data.IORef
+import Data.Monoid
 import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
@@ -43,6 +44,10 @@ pauseUntilGreen stateMVar = do
         GreenLight _ -> return ()
         _ -> threadDelay (1000 * 1000) >> pauseUntilGreen stateMVar
 
+type Host = String
+type Port = String
+type BoltState k v = Map.Map k v
+
 spoutStatePipe :: ZK.Zookeeper -> ProcessorId -> MVar MasterState -> Pipe (Payload k v) (Payload k v) IO ()
 spoutStatePipe zk sid stateMVar = forever $ do
     ms <- lift $ readMVar stateMVar
@@ -58,7 +63,9 @@ spoutStatePipe zk sid stateMVar = forever $ do
             lift $ threadDelay $ 1000 * 1000 * 10
     where passOn = await >>= yield
 
-runSpoutFromProducer :: (Show k, Show v, Topology t)
+-- | Register a spout processor on Zookeeper backed by a Kafka partition*.
+-- TODO*: Change source from a file to a Kafka partition.
+runSpoutFromProducer :: Topology t
                      => ZKOptions
                      -> ProcessorId
                      -> t
@@ -71,22 +78,19 @@ runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
         _ <- forkOS $ pipeThread zk stateMVar
 
         monitorMasterState zk $ \et -> case et of
-            (Left e) -> throw $ wrapInHSError e UnexpectedZookeeperError
-            (Right ms) -> do 
+            Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
+            Right ms -> do
                 putStrLn $ "Spout: detected master state change to " ++ show ms
                 tryTakeMVar stateMVar >> putMVar stateMVar ms -- Overwrite
-
     throw $ ZookeeperConnectionError
         "Spout zookeeper registration terminated unexpectedly"
 
-    
-    where pipeThread zk stateMVar = let downstream = downstreamConsumer sname topology uf in 
-                       runEffect $ producer >-> spoutStatePipe zk sid stateMVar >-> downstream
-            
+  where
+    pipeThread zk stateMVar =
+      let downstream = downstreamConsumer sname topology uf
+      in runEffect $ producer >-> spoutStatePipe zk sid stateMVar >-> downstream
 
-        
-
-runDownstream :: (Show k, Show v, Read k, Read v, Topology t)
+runDownstream :: (Ord k, Monoid v, Topology t)
               => ZKOptions
               -> ProcessorId
               -> t
@@ -95,11 +99,14 @@ runDownstream :: (Show k, Show v, Read k, Read v, Topology t)
 runDownstream opts did@(dname, _) topology uformula = do
     let (_, port) = addressFor topology did
         ctype = consumerType (fromJust $ Map.lookup dname (processors topology))
-        accepted socket = let sp = socketProducer uformula socket
-                              fc = formulaConsumer uformula ctype
-                          in runEffect $ sp >-> fc
-    registerProcessor opts did SinkRunning $ const $ serve HostAny port $ \(s, _) -> accepted s
-
+        producer = socketProducer uformula
+        consumer =
+            case ctype of
+                BoltConsumer -> boltPipe uformula Map.empty >->
+                    downstreamConsumer dname topology uformula
+                SinkConsumer -> sinkConsumer uformula
+        processSocket s = runEffect $ producer s >-> consumer
+    registerProcessor opts did SinkRunning $ const $ serve HostAny port $ \(s, _) -> processSocket s
     throw $ ZookeeperConnectionError
         "Sink zookeeper registration terminated unexpectedly"
 
@@ -107,7 +114,6 @@ killFromRef :: IORef (Maybe ThreadId) -> IO ()
 killFromRef ioRef = do
     mt <- readIORef ioRef
     Foldable.forM_ mt killThread
-
 
 waitUntilSnapshotsComplete :: (Topology t) => ZK.Zookeeper -> t -> IO ()
 waitUntilSnapshotsComplete _ _ = return ()
@@ -125,7 +131,7 @@ negotiateSnapshot zk t = do
             if length spoutsPaused == length spoutStates then return spoutsPaused
                 else untilSpoutsPaused
 
-runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
+runNegotiator :: Topology t => ZKOptions -> t -> IO ()
 runNegotiator zkOpts topology = do
     fullChildrenThreadId <- newIORef (Nothing :: Maybe ThreadId)
     registerProcessor zkOpts ("negotiator", 0) UnspecifiedState $ \zk ->
@@ -133,7 +139,6 @@ runNegotiator zkOpts topology = do
             (DuplicateNegotiatorError
                 "Could not set state, probable duplicate process")
             (createMasterState zk Initialization) >> watchLoop zk fullChildrenThreadId
-
     throw $ ZookeeperConnectionError
         "Negotiator zookeeper registration terminated unexpectedly"
 
@@ -160,58 +165,78 @@ runNegotiator zkOpts topology = do
             tid <- forkOS $ fullThread zk
             writeIORef fullThreadId $ Just tid
 
-
--- | Builds a payload consumer using the provided UserFormula and based
--- on the operation
-formulaConsumer :: UserFormula k v
-                -> ConsumerType
-                -> Consumer (Payload k v) IO ()
-formulaConsumer uf tconsumer = forever $ do
-    payload <- await
-    case tconsumer of
-      BoltConsumer -> lift $ outputFn uf (payloadTuple payload)
-      SinkConsumer -> lift $ outputFn uf (payloadTuple payload)
-
-socketProducer :: (Read k, Read v)
-               => UserFormula k v
+-- | Returns a Producer that receives a stream of payloads through a given
+-- socket and deserializes them.
+socketProducer :: UserFormula k v
                -> Socket
                -> Producer (Payload k v) IO ()
-socketProducer uf s = do
-    h <- lift (socketToHandle s ReadMode)
+socketProducer uformula s = do
+    h <- lift $ socketToHandle s ReadMode
     lift $ hSetBuffering h LineBuffering
-    producerInternal h
+    emitNextPayload h
   where
-    producerInternal h = do
+    emitNextPayload h = do
         t <- lift $ hGetLine h
         let [sTuple, sClock] = splitOn "\1" t
-            tuple = deserialize uf sTuple
+            tuple = deserialize uformula sTuple
             clock = read sClock :: Clock
         yield (Payload tuple clock)
-        producerInternal h
+        emitNextPayload h
 
-poolConnect :: (String, String) -> Map.Map (String, String) Handle -> IO Handle
-poolConnect (host, port) m = case Map.lookup (host, port) m of
-    Just so -> return so
-    Nothing -> connect host port (\(s, _) -> socketToHandle s WriteMode)
+-- | Builds a Pipe that receives a payload emitted from a handle and
+-- performs the monoidal append operation associated with the given processor.
+boltPipe :: (Ord k, Monoid v)
+         => UserFormula k v
+         -> BoltState k v
+         -> Pipe (Payload k v) (Payload k v) IO ()
+boltPipe uformula state = do
+    payload <- await
+    let (key, val) = payloadTuple payload
+        oldval = Map.findWithDefault mempty key state
+        newval = oldval `mappend` val
+    yield $ Payload (key, newval) (payloadClock payload)
+    boltPipe uformula $ Map.union (Map.singleton key newval) state
 
-downstreamConsumer :: (Show k, Show v, Topology t)
+-- | Builds a Consumer that receives a payload emitted from a handle and
+-- performs the sink operation defined in the given user formula.
+sinkConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
+sinkConsumer uformula = forever $ do
+    payload <- await
+    lift $ outputFn uformula (payloadTuple payload)
+
+-- | @poolConnect address handleMap@ will return a handle for communication
+-- with a processor, using an existing handle if one exists in
+-- @handleMap@, creating a new connection to the host otherwise.
+poolConnect :: (Host, Port) -> Map.Map (Host, Port) Handle -> IO Handle
+poolConnect (host, port) handleMap = case Map.lookup (host, port) handleMap of
+    Just h -> return h
+    Nothing -> connect host port $ \(s, _) -> socketToHandle s WriteMode
+
+-- | Produces a single Consumer comprised of all stream consumer layers of
+-- the topology (bolts and sinks) that subscribe to a emitting processor's
+-- stream. Payloads received by the consumer are sent to the next layer in
+-- the topology.
+downstreamConsumer :: Topology t
                    => ProcessorName
                    -> t
                    -> UserFormula k v
                    -> Consumer (Payload k v) IO ()
-downstreamConsumer processorName topology uf = dcInternal Map.empty
-    where dcInternal connectionPool = do
-            payload <- await
-            let sendAddresses = downstreamAddresses topology processorName payload
-                addressToHandle (host, port) = do
-                    h <- lift $ poolConnect (host, port) connectionPool
-                    lift $ hPutStrLn h (serialize uf (payloadTuple payload) ++
-                      "\1" ++ show (payloadClock payload))
-                    return ((host, port), h)
-            newHandles <- mapM addressToHandle sendAddresses
-            dcInternal $ Map.union (Map.fromList newHandles) connectionPool
+downstreamConsumer processorName topology uformula = emitToNextLayer Map.empty
+  where
+    emitToNextLayer connPool = do
+        payload <- await
+        let sendAddresses = downstreamAddresses topology processorName payload
+            getHandle addressTuple = lift $ poolConnect addressTuple connPool
+            emitToHandle h = (lift . hPutStrLn h) $
+                serialize uformula (payloadTuple payload) ++ "\1" ++
+                    show (payloadClock payload)
+        newHandles <- mapM getHandle sendAddresses
+        mapM_ emitToHandle newHandles
+        let newPool = Map.fromList $ zip sendAddresses newHandles
+        emitToNextLayer $ Map.union newPool connPool
 
 consumerType :: Processor -> ConsumerType
 consumerType Bolt{} = BoltConsumer
 consumerType Sink{} = SinkConsumer
 consumerType _ = error "Given processor is not a consumer"
+

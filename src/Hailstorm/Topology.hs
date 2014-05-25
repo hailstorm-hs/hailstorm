@@ -47,7 +47,7 @@ instance Topology HardcodedTopology where
     numProcessors (HardcodedTopology pmap _) = Map.fold (\p l -> l + case p of
             (Spout _ ps _) -> ps
             (Bolt _ ps _) -> ps
-            (Sink _ ps) -> ps
+            (Sink  _ ps) -> ps
         ) 0 pmap
 
     processors = processorMap

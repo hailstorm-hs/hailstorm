@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-module Hailstorm.Error 
+module Hailstorm.Error
 ( HSError (..)
 , forceEitherIO
 , warnOnLeftIO
@@ -15,10 +15,9 @@ data HSError = UnknownWorkerException
              | DuplicateNegotiatorError String
              | ZookeeperConnectionError String
              | HSErrorWrap HSError String
-    deriving (Show, Typeable)
+               deriving (Show, Typeable)
+instance Exception HSError
 
-instance Exception HSError 
-    
 wrapInHSError :: (Show e) => e -> HSError -> HSError
 wrapInHSError e hs = HSErrorWrap hs (show e)
 
