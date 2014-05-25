@@ -33,7 +33,7 @@ data ConsumerType = BoltConsumer | SinkConsumer
 debugSetMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
 debugSetMasterState zk ms = do
     r <- setMasterState zk ms
-    putStrLn $ "Master state set to " ++ (show ms)
+    putStrLn $ "Master state set to " ++ show ms
     return r
 
 pauseUntilGreen :: MVar MasterState -> IO ()
@@ -41,7 +41,7 @@ pauseUntilGreen stateMVar = do
     ms <- readMVar stateMVar
     case ms of 
         GreenLight _ -> return ()
-        _ -> threadDelay (1000 * 1000 * 1) >> pauseUntilGreen stateMVar
+        _ -> threadDelay (1000 * 1000) >> pauseUntilGreen stateMVar
 
 spoutStatePipe :: ZK.Zookeeper -> ProcessorId -> MVar MasterState -> Pipe (Payload k v) (Payload k v) IO ()
 spoutStatePipe zk sid stateMVar = forever $ do
@@ -143,7 +143,7 @@ runNegotiator zkOpts topology = do
         threadDelay $ 1000 * 1000 * 5
         nextSnapshotClock <- negotiateSnapshot zk topology 
         _ <- forceEitherIO UnknownWorkerException (debugSetMasterState zk (GreenLight nextSnapshotClock))
-        putStrLn "Master state set to green light"
+        mzero
         
     watchLoop zk fullThreadId = childrenWatchLoop zk "/living_processors" $ \children -> do
       killFromRef fullThreadId       
