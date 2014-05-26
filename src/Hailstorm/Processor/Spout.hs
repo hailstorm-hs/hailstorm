@@ -7,7 +7,7 @@ import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
-import Hailstorm.UserFormula
+import Hailstorm.Clock
 import Hailstorm.Error
 import Hailstorm.InputSource
 import Hailstorm.MasterState
@@ -15,9 +15,11 @@ import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
 import Hailstorm.Topology
+import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import Pipes
 import qualified Database.Zookeeper as ZK
+import qualified Data.Map as Map
 
 -- | Start processing with a spout.
 runSpout :: (Topology t, InputSource s)
@@ -37,30 +39,37 @@ runSpout zkOpts pName partition topology inputSource uFormula = do
   where
     pipeThread zk spoutId stateMVar =
       let downstream = downstreamPoolConsumer (fst spoutId) topology uFormula
-          producer = payloadProducer uFormula $
-              partitionProducer inputSource partition 0
+          producer = partitionProducer inputSource partition 0
       in runEffect $
-          producer >-> spoutStatePipe zk spoutId stateMVar >-> downstream
+        producer >-> spoutStatePipe zk spoutId 0 uFormula stateMVar >-> downstream
 
 spoutStatePipe :: ZK.Zookeeper
                -> ProcessorId
+               -> Offset
+               -> UserFormula k v
                -> MVar MasterState
-               -> Pipe (Payload k v) (Payload k v) IO ()
-spoutStatePipe zk spoutId stateMVar = forever $ do
+               -> Pipe InputTuple (Payload k v) IO ()
+spoutStatePipe zk spoutId@(partition, _) lastOffset uFormula stateMVar = do
     ms <- lift $ readMVar stateMVar
     case ms of
         Flowing _ -> passOn
         Blocked ->  do
             void <$> lift $ forceEitherIO UnknownWorkerException
-                (setProcessorState zk spoutId $ SpoutPaused "fun" 0)
+                (setProcessorState zk spoutId $ SpoutPaused partition lastOffset)
             lift $ pauseUntilFlowing stateMVar
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId SpoutRunning)
+            loop
         _ -> do
             lift $ putStrLn $
                 "Spout waiting for open valve (state: " ++ show ms ++ ")"
             lift $ threadDelay $ 1000 * 1000 * 10
-  where passOn = await >>= yield
+            loop
+  where passOn = do
+            InputTuple bs p o <- await
+            yield $ Payload (convertFn uFormula bs) (Clock $ Map.singleton p o)
+            spoutStatePipe zk spoutId o uFormula stateMVar
+        loop = spoutStatePipe zk spoutId lastOffset uFormula stateMVar
 
 pauseUntilFlowing :: MVar MasterState -> IO ()
 pauseUntilFlowing stateMVar = do
