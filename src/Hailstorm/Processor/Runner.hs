@@ -26,8 +26,6 @@ import Pipes
 import System.IO
 import qualified Data.Map as Map
 
-data ConsumerType = BoltConsumer | SinkConsumer
-
 type Host = String
 type Port = String
 type BoltState k v = Map.Map k v
@@ -66,13 +64,15 @@ runDownstream :: (Ord k, Monoid v, Topology t)
               -> IO ()
 runDownstream opts did@(dname, _) topology uformula = do
     let (_, port) = addressFor topology did
-        ctype = consumerType (fromJust $ Map.lookup dname (processors topology))
+        ctype = processorType (fromJust $ Map.lookup dname
+            (processors topology))
         producer = socketProducer uformula
         consumer =
             case ctype of
-                BoltConsumer -> boltPipe uformula Map.empty >->
+                Bolt -> boltPipe uformula Map.empty >->
                     downstreamConsumer dname topology uformula
-                SinkConsumer -> sinkConsumer uformula
+                Sink -> sinkConsumer uformula
+                _ -> error "Non-consumer processor provided"
         processSocket s = runEffect $ producer s >-> consumer
     registerProcessor opts did SinkRunning $ const $ serve HostAny port $
       \(s, _) -> processSocket s
@@ -148,9 +148,3 @@ downstreamConsumer processorName topology uformula = emitToNextLayer Map.empty
         mapM_ emitToHandle newHandles
         let newPool = Map.fromList $ zip sendAddresses newHandles
         emitToNextLayer $ Map.union newPool connPool
-
-consumerType :: Processor -> ConsumerType
-consumerType Bolt{} = BoltConsumer
-consumerType Sink{} = SinkConsumer
-consumerType _ = error "Given processor is not a consumer"
-

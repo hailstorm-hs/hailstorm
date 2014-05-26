@@ -40,18 +40,10 @@ instance Topology HardcodedTopology where
                 in fromJust $ Map.lookup
                     (name downstream, parallelism downstream - 1) (addresses t)
         in map findAddress (downstreams upstream)
-
     addressFor t (processorName, processorNumber) = fromJust $
         Map.lookup (processorName, processorNumber) (addresses t)
-
-    numProcessors (HardcodedTopology pmap _) = Map.fold (\p l -> l + case p of
-            (Spout _ ps _) -> ps
-            (Bolt _ ps _) -> ps
-            (Sink  _ ps) -> ps
-        ) 0 pmap
-
+    numProcessors (HardcodedTopology pmap _) = Map.fold (\p l -> l + parallelism p) 0 pmap
     processors = processorMap
 
-
 spoutIds :: (Topology t) => t -> [ProcessorId]
-spoutIds t = [(n,c) | (_, Spout n p _) <- Map.toList (processors t), c <- [0..(p-1)]]
+spoutIds t = [(n,c) | (_, Processor Spout n p _) <- Map.toList (processors t), c <- [0..(p-1)]]
