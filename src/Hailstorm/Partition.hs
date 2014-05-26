@@ -11,7 +11,7 @@ import System.IO
 import qualified Data.ByteString as B
 
 type Offset = Integer
-type Partition = String 
+type Partition = String
 
 -- | An offset into a data partition.
 data PartitionOffset = PartitionOffset B.ByteString Partition Offset
@@ -22,7 +22,7 @@ data PartitionOffset = PartitionOffset B.ByteString Partition Offset
 partitionFromFile :: FilePath -> Producer PartitionOffset IO ()
 partitionFromFile fp = do
     h <- lift $ openFile fp ReadMode
-    partitionFromHandle h (show fp) 0
+    partitionFromHandle h fp 0
 
 -- | Creates a data partition from a given handle. The returned producer
 -- produces offsets into the partition.
