@@ -39,6 +39,7 @@ library
    , pipes
    , directory
    , filepath
+   , hslogger
    , word8
    , network-simple
    , network
@@ -60,6 +61,7 @@ executable hailstorm
    , pipes
    , directory
    , filepath
+   , hslogger
    , network-simple
    , network
    , word8

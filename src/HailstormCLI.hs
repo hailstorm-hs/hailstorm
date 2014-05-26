@@ -4,6 +4,7 @@ import Control.Applicative
 import Options
 import Hailstorm.Sample.WordCountSample
 import Hailstorm.ZKCluster
+import Hailstorm.Logging
 import System.FilePath
 import System.Environment
 import qualified Hailstorm.Runner as HSR
@@ -40,6 +41,7 @@ runSample mainOpts _ _ = do
     -- NOTE: Symlink data/test.txt to ~ for convenience (assuming you
     -- symlink hailstorm too)
     home <- getEnv "HOME"
+    initializeLogging
     HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
         wordCountFormula  (home </> "test.txt") "words"
 
