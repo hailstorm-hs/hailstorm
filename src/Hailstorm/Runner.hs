@@ -5,6 +5,7 @@ import Control.Monad
 import Data.Maybe
 import Data.Monoid
 import GHC.Conc (threadStatus, ThreadStatus(..))
+import Hailstorm.Negotiator
 import Hailstorm.Partition
 import Hailstorm.Payload
 import Hailstorm.Processor.Runner

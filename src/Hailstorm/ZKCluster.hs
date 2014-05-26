@@ -1,6 +1,5 @@
 module Hailstorm.ZKCluster
-( MasterState(..)
-, ZKOptions(..)
+( ZKOptions(..)
 , initializeCluster
 , watchProcessors
 , watchMasterState
@@ -15,8 +14,8 @@ module Hailstorm.ZKCluster
 
 import Control.Concurrent
 import Control.Monad
-import Hailstorm.Clock
 import Hailstorm.Processor
+import Hailstorm.MasterState
 import Data.Either
 import Data.List.Split
 import Data.Map (Map)
@@ -27,12 +26,6 @@ import qualified Data.Map as Map
 
 type ProcessorAction = (ZK.Zookeeper -> IO ())
 data ZKOptions       = ZKOptions { connectionString :: String }
-
-data MasterState = Unavailable
-                 | Initialization
-                 | SpoutPause
-                 | GreenLight Clock
-                   deriving (Eq, Read, Show)
 
 -- | Master state Zookeeper node.
 zkMasterStateNode :: String
