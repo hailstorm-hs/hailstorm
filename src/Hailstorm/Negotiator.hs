@@ -1,6 +1,6 @@
 module Hailstorm.Negotiator
 ( runNegotiator
-, spoutStatePipe
+, negotiatorPipe
 ) where
 
 import Control.Applicative
@@ -36,7 +36,7 @@ runNegotiator zkOpts topology = do
         threadDelay $ 1000 * 1000 * 5
         nextSnapshotClock <- negotiateSnapshot zk topology
         void <$> forceEitherIO UnknownWorkerException $
-            debugSetMasterState zk $ GreenLight nextSnapshotClock
+            debugSetMasterState zk $ ValveOpened nextSnapshotClock
 
     watchLoop zk fullThreadId = watchProcessors zk $ \childrenEither ->
         case childrenEither of
@@ -56,32 +56,32 @@ runNegotiator zkOpts topology = do
                         tid <- forkOS $ fullThread zk
                         writeIORef fullThreadId $ Just tid
 
-spoutStatePipe :: ZK.Zookeeper
+negotiatorPipe :: ZK.Zookeeper
                -> ProcessorId
                -> MVar MasterState
                -> Pipe (Payload k v) (Payload k v) IO ()
-spoutStatePipe zk spoutId stateMVar = forever $ do
+negotiatorPipe zk spoutId stateMVar = forever $ do
     ms <- lift $ readMVar stateMVar
     case ms of
-        GreenLight _ -> passOn
-        SpoutPause ->  do
+        ValveOpened _ -> passOn
+        ValveClosed ->  do
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId $ SpoutPaused "fun" 0)
-            lift $ pauseUntilGreen stateMVar
+            lift $ pauseUntilValveOpened stateMVar
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId SpoutRunning)
         _ -> do
             lift $ putStrLn $
-                "Spout waiting for green light (state: " ++ show ms ++ ")"
+                "Spout waiting for open valve (state: " ++ show ms ++ ")"
             lift $ threadDelay $ 1000 * 1000 * 10
   where passOn = await >>= yield
 
-pauseUntilGreen :: MVar MasterState -> IO ()
-pauseUntilGreen stateMVar = do
+pauseUntilValveOpened :: MVar MasterState -> IO ()
+pauseUntilValveOpened stateMVar = do
     ms <- readMVar stateMVar
     case ms of
-        GreenLight _ -> return ()
-        _ -> threadDelay (1000 * 1000) >> pauseUntilGreen stateMVar
+        ValveOpened _ -> return ()
+        _ -> threadDelay (1000 * 1000) >> pauseUntilValveOpened stateMVar
 
 debugSetMasterState :: ZK.Zookeeper
                     -> MasterState
@@ -102,7 +102,7 @@ waitUntilSnapshotsComplete _ _ = return ()
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
-        debugSetMasterState zk SpoutPause
+        debugSetMasterState zk ValveClosed
     offsetsAndPartitions <- untilSpoutsPaused
     return $ Clock (Map.fromList offsetsAndPartitions)
 

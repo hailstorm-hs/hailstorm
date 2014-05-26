@@ -39,8 +39,8 @@ runSpoutFromProducer :: Topology t
                      -> UserFormula k v
                      -> Producer (Payload k v) IO ()
                      -> IO ()
-runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
-    registerProcessor zkOpts sid SpoutRunning $ \zk -> do
+runSpoutFromProducer zkOpts spoutId topology uf producer = do
+    registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
         stateMVar <- newEmptyMVar
         _ <- forkOS $ pipeThread zk stateMVar
 
@@ -53,8 +53,9 @@ runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
         "Spout zookeeper registration terminated unexpectedly"
   where
     pipeThread zk stateMVar =
-      let downstream = downstreamConsumer sname topology uf
-      in runEffect $ producer >-> spoutStatePipe zk sid stateMVar >-> downstream
+      let downstream = downstreamConsumer (fst spoutId) topology uf
+      in runEffect $
+        producer >-> negotiatorPipe zk spoutId stateMVar >-> downstream
 
 runDownstream :: (Ord k, Monoid v, Topology t)
               => ZKOptions

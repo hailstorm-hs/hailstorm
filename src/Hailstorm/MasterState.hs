@@ -6,6 +6,6 @@ import Hailstorm.Clock
 
 data MasterState = Unavailable
                  | Initialization
-                 | SpoutPause
-                 | GreenLight Clock
+                 | ValveClosed
+                 | ValveOpened Clock
                    deriving (Eq, Read, Show)
