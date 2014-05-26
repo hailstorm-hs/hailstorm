@@ -5,6 +5,7 @@ module Hailstorm.Processor.Runner
 , runDownstream
 ) where
 
+import Control.Applicative
 import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
@@ -15,7 +16,7 @@ import Data.Monoid
 import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
-import Hailstorm.Negotiator
+import Hailstorm.MasterState
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Topology
@@ -25,6 +26,7 @@ import Network.Socket(socketToHandle)
 import Pipes
 import System.IO
 import qualified Data.Map as Map
+import qualified Database.Zookeeper as ZK
 
 type Host = String
 type Port = String
@@ -55,7 +57,7 @@ runSpoutFromProducer zkOpts spoutId topology uf producer = do
     pipeThread zk stateMVar =
       let downstream = downstreamConsumer (fst spoutId) topology uf
       in runEffect $
-        producer >-> negotiatorPipe zk spoutId stateMVar >-> downstream
+        producer >-> spoutStatePipe zk spoutId stateMVar >-> downstream
 
 runDownstream :: (Ord k, Monoid v, Topology t)
               => ZKOptions
@@ -79,6 +81,33 @@ runDownstream opts did@(dname, _) topology uformula = do
       \(s, _) -> processSocket s
     throw $ ZookeeperConnectionError
         "Sink zookeeper registration terminated unexpectedly"
+
+spoutStatePipe :: ZK.Zookeeper
+               -> ProcessorId
+               -> MVar MasterState
+               -> Pipe (Payload k v) (Payload k v) IO ()
+spoutStatePipe zk spoutId stateMVar = forever $ do
+    ms <- lift $ readMVar stateMVar
+    case ms of
+        ValveOpened _ -> passOn
+        ValveClosed ->  do
+            void <$> lift $ forceEitherIO UnknownWorkerException
+                (setProcessorState zk spoutId $ SpoutPaused "fun" 0)
+            lift $ pauseUntilValveOpened stateMVar
+            void <$> lift $ forceEitherIO UnknownWorkerException
+                (setProcessorState zk spoutId SpoutRunning)
+        _ -> do
+            lift $ putStrLn $
+                "Spout waiting for open valve (state: " ++ show ms ++ ")"
+            lift $ threadDelay $ 1000 * 1000 * 10
+  where passOn = await >>= yield
+
+pauseUntilValveOpened :: MVar MasterState -> IO ()
+pauseUntilValveOpened stateMVar = do
+    ms <- readMVar stateMVar
+    case ms of
+        ValveOpened _ -> return ()
+        _ -> threadDelay (1000 * 1000) >> pauseUntilValveOpened stateMVar
 
 -- | Returns a Producer that receives a stream of payloads through a given
 -- socket and deserializes them.

@@ -1,6 +1,5 @@
 module Hailstorm.Negotiator
 ( runNegotiator
-, negotiatorPipe
 ) where
 
 import Control.Applicative
@@ -9,11 +8,9 @@ import Control.Exception
 import Control.Monad
 import Data.IORef
 import Data.Maybe
-import Pipes
 import Hailstorm.Clock
 import Hailstorm.MasterState
 import Hailstorm.Error
-import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Topology
 import Hailstorm.ZKCluster
@@ -55,33 +52,6 @@ runNegotiator zkOpts topology = do
                     else do
                         tid <- forkOS $ fullThread zk
                         writeIORef fullThreadId $ Just tid
-
-negotiatorPipe :: ZK.Zookeeper
-               -> ProcessorId
-               -> MVar MasterState
-               -> Pipe (Payload k v) (Payload k v) IO ()
-negotiatorPipe zk spoutId stateMVar = forever $ do
-    ms <- lift $ readMVar stateMVar
-    case ms of
-        ValveOpened _ -> passOn
-        ValveClosed ->  do
-            void <$> lift $ forceEitherIO UnknownWorkerException
-                (setProcessorState zk spoutId $ SpoutPaused "fun" 0)
-            lift $ pauseUntilValveOpened stateMVar
-            void <$> lift $ forceEitherIO UnknownWorkerException
-                (setProcessorState zk spoutId SpoutRunning)
-        _ -> do
-            lift $ putStrLn $
-                "Spout waiting for open valve (state: " ++ show ms ++ ")"
-            lift $ threadDelay $ 1000 * 1000 * 10
-  where passOn = await >>= yield
-
-pauseUntilValveOpened :: MVar MasterState -> IO ()
-pauseUntilValveOpened stateMVar = do
-    ms <- readMVar stateMVar
-    case ms of
-        ValveOpened _ -> return ()
-        _ -> threadDelay (1000 * 1000) >> pauseUntilValveOpened stateMVar
 
 debugSetMasterState :: ZK.Zookeeper
                     -> MasterState
