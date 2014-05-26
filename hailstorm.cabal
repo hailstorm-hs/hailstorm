@@ -25,7 +25,9 @@ library
     Hailstorm.Negotiator
     Hailstorm.Payload
     Hailstorm.Processor
-    Hailstorm.Processor.Runner
+    Hailstorm.Processor.Spout
+    Hailstorm.Processor.Downstream
+    Hailstorm.Processor.Pool
     Hailstorm.Runner
     Hailstorm.Sample.WordCountSample
     Hailstorm.Topology

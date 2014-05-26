@@ -7,8 +7,8 @@ import Data.Monoid
 import GHC.Conc (threadStatus, ThreadStatus(..))
 import Hailstorm.InputSource
 import Hailstorm.Negotiator
-import Hailstorm.Payload
-import Hailstorm.Processor.Runner
+import Hailstorm.Processor.Spout
+import Hailstorm.Processor.Downstream
 import Hailstorm.Topology
 import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
