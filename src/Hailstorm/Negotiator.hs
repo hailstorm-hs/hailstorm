@@ -27,7 +27,7 @@ runNegotiator zkOpts topology = do
     registerProcessor zkOpts ("negotiator", 0) UnspecifiedState $ \zk ->
         forceEitherIO
             (DuplicateNegotiatorError "Could not set state: duplicate process?")
-            (debugSetMasterState zk Initialization) >>
+            (createMasterState zk Initialization) >>
                 watchLoop zk fullChildrenThreadId
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where

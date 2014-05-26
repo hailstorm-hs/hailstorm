@@ -5,6 +5,7 @@ module Hailstorm.ZKCluster
 , watchMasterState
 , quietZK
 , registerProcessor
+, createMasterState
 , setMasterState
 , setProcessorState
 , getProcessorState
@@ -64,12 +65,8 @@ registerProcessor opts pid initialState action =
 initializeCluster :: ZKOptions -> IO ()
 initializeCluster opts = withConnection opts $ \zk -> do
     pnode <- ZK.create zk zkLivingProcessorsNode Nothing ZK.OpenAclUnsafe []
-    mnode <- ZK.create zk zkMasterStateNode Nothing ZK.OpenAclUnsafe []
     case pnode of
         Left e -> error $ "Error creating living processors node: " ++ show e
-        Right _ -> return ()
-    case mnode of
-        Left e -> error $ "Error creating master state node: " ++ show e
         Right _ -> return ()
 
 -- | Gets debug information from Zookeeper.
@@ -137,6 +134,14 @@ watchMasterState zk callback = do
 setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
 setMasterState zk ms = ZK.set zk zkMasterStateNode
     (Just $ serializeZK ms) Nothing
+
+-- | Create an ephemeral master state node on Zookeeper.
+createMasterState :: ZK.Zookeeper
+                 -> MasterState
+                 -> IO (Either ZK.ZKError String)
+createMasterState zk ms =
+    ZK.create zk zkMasterStateNode
+        (Just $ serializeZK ms) ZK.OpenAclUnsafe [ZK.Ephemeral]
 
 -- | Sets state of processor in Zookeeper.
 setProcessorState :: ZK.Zookeeper
