@@ -33,7 +33,7 @@ runNegotiator zkOpts topology = do
         threadDelay $ 1000 * 1000 * 5
         nextSnapshotClock <- negotiateSnapshot zk topology
         void <$> forceEitherIO UnknownWorkerException $
-            debugSetMasterState zk $ ValveOpened nextSnapshotClock
+            debugSetMasterState zk $ Flowing $ Just nextSnapshotClock
 
     watchLoop zk fullThreadId = watchProcessors zk $ \childrenEither ->
         case childrenEither of
@@ -72,7 +72,7 @@ waitUntilSnapshotsComplete _ _ = return ()
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
-        debugSetMasterState zk ValveClosed
+        debugSetMasterState zk SpoutsPaused
     partitionsAndOffsets <- untilSpoutsPaused
     return $ Clock (Map.fromList partitionsAndOffsets)
 

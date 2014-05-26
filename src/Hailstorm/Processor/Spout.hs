@@ -58,11 +58,11 @@ spoutStatePipe :: ZK.Zookeeper
 spoutStatePipe zk spoutId stateMVar = forever $ do
     ms <- lift $ readMVar stateMVar
     case ms of
-        ValveOpened _ -> passOn
-        ValveClosed ->  do
+        Flowing _ -> passOn
+        SpoutsPaused ->  do
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId $ SpoutPaused "fun" 0)
-            lift $ pauseUntilValveOpened stateMVar
+            lift $ pauseUntilFlowing stateMVar
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId SpoutRunning)
         _ -> do
@@ -71,10 +71,10 @@ spoutStatePipe zk spoutId stateMVar = forever $ do
             lift $ threadDelay $ 1000 * 1000 * 10
   where passOn = await >>= yield
 
-pauseUntilValveOpened :: MVar MasterState -> IO ()
-pauseUntilValveOpened stateMVar = do
+pauseUntilFlowing :: MVar MasterState -> IO ()
+pauseUntilFlowing stateMVar = do
     ms <- readMVar stateMVar
     case ms of
-        ValveOpened _ -> return ()
-        _ -> threadDelay (1000 * 1000) >> pauseUntilValveOpened stateMVar
+        Flowing _ -> return ()
+        _ -> threadDelay (1000 * 1000) >> pauseUntilFlowing stateMVar
 
