@@ -32,7 +32,7 @@ zkInit mainOpts _ _ = initializeCluster (zkOptionsFromMainOptions mainOpts)
 -- | Prints debug information from Zookeeper instance.
 zkShow :: MainOptions -> EmptyOptions -> [String] -> IO ()
 zkShow mainOpts _ _ =
-    getStatus (zkOptionsFromMainOptions mainOpts) >>= putStrLn
+    getDebugInfo (zkOptionsFromMainOptions mainOpts) >>= putStrLn
 
 -- | Runs the sample scenario and topology.
 runSample :: MainOptions -> EmptyOptions -> [String] -> IO ()

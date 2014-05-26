@@ -31,7 +31,9 @@ import qualified Database.Zookeeper as ZK
 
 data ConsumerType = BoltConsumer | SinkConsumer
 
-debugSetMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
+debugSetMasterState :: ZK.Zookeeper
+                    -> MasterState
+                    -> IO (Either ZK.ZKError ZK.Stat)
 debugSetMasterState zk ms = do
     r <- setMasterState zk ms
     putStrLn $ "Master state set to " ++ show ms
@@ -77,7 +79,7 @@ runSpoutFromProducer zkOpts sid@(sname, _) topology uf producer = do
         stateMVar <- newEmptyMVar
         _ <- forkOS $ pipeThread zk stateMVar
 
-        monitorMasterState zk $ \et -> case et of
+        watchMasterState zk $ \et -> case et of
             Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
             Right ms -> do
                 putStrLn $ "Spout: detected master state change to " ++ show ms
@@ -138,10 +140,9 @@ runNegotiator zkOpts topology = do
         forceEitherIO
             (DuplicateNegotiatorError
                 "Could not set state, probable duplicate process")
-            (createMasterState zk Initialization) >> watchLoop zk fullChildrenThreadId
+            (debugSetMasterState zk Initialization) >> watchLoop zk fullChildrenThreadId
     throw $ ZookeeperConnectionError
         "Negotiator zookeeper registration terminated unexpectedly"
-
   where
     fullThread zk = forever $ do
         waitUntilSnapshotsComplete zk topology
@@ -149,21 +150,24 @@ runNegotiator zkOpts topology = do
         nextSnapshotClock <- negotiateSnapshot zk topology 
         _ <- forceEitherIO UnknownWorkerException (debugSetMasterState zk (GreenLight nextSnapshotClock))
         return ()
-        
-    watchLoop zk fullThreadId = childrenWatchLoop zk "/living_processors" $ \children -> do
-      killFromRef fullThreadId       
 
-      putStrLn $ "Children changed to " ++ show children
-      let expectedRegistrations = numProcessors topology + 1
+    watchLoop zk fullThreadId = watchProcessors zk $ \childrenEither ->
+      case childrenEither of
+        Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
+        Right children -> do
+            killFromRef fullThreadId
 
-      if length children < expectedRegistrations
-        then do
-            putStrLn "Not enough children"
-            _ <- forceEitherIO UnexpectedZookeeperError (debugSetMasterState zk Unavailable)
-            return ()
-        else do
-            tid <- forkOS $ fullThread zk
-            writeIORef fullThreadId $ Just tid
+            putStrLn $ "Children changed to " ++ show children
+            let expectedRegistrations = numProcessors topology + 1
+
+            if length children < expectedRegistrations
+              then do
+                  putStrLn "Not enough children"
+                  _ <- forceEitherIO UnexpectedZookeeperError (debugSetMasterState zk Unavailable)
+                  return ()
+              else do
+                  tid <- forkOS $ fullThread zk
+                  writeIORef fullThreadId $ Just tid
 
 -- | Returns a Producer that receives a stream of payloads through a given
 -- socket and deserializes them.
