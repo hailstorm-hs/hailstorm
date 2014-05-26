@@ -8,7 +8,7 @@ module Hailstorm.Processor
 , mkProcessorMap
 ) where
 
-import Hailstorm.Partition
+import Hailstorm.InputSource
 import qualified Data.Map as Map
 
 type ProcessorInstance = Int

@@ -20,9 +20,9 @@ library
   exposed-modules:
     Hailstorm.Clock
     Hailstorm.Error
+    Hailstorm.InputSource
     Hailstorm.MasterState
     Hailstorm.Negotiator
-    Hailstorm.Partition
     Hailstorm.Payload
     Hailstorm.Processor
     Hailstorm.Processor.Runner

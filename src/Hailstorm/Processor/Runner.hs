@@ -1,7 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Hailstorm.Processor.Runner
-( runSpoutFromProducer
+( runSpout
 , runDownstream
 ) where
 
@@ -16,6 +16,7 @@ import Data.Monoid
 import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
+import Hailstorm.InputSource
 import Hailstorm.MasterState
 import Hailstorm.Payload
 import Hailstorm.Processor
@@ -32,19 +33,23 @@ type Host = String
 type Port = String
 type BoltState k v = Map.Map k v
 
--- | Register a spout processor on Zookeeper backed by a Kafka partition*.
--- TODO*: Change source from a file to a Kafka partition.
-runSpoutFromProducer :: Topology t
-                     => ZKOptions
-                     -> ProcessorId
-                     -> t
-                     -> UserFormula k v
-                     -> Producer (Payload k v) IO ()
-                     -> IO ()
-runSpoutFromProducer zkOpts spoutId topology uf producer = do
+-- | Start processing with a spout
+runSpout :: (Topology t, InputSource s)
+         => ZKOptions
+         -> ProcessorName
+         -> Partition
+         -> t
+         -> s
+         -> UserFormula k v
+         -> IO ()
+
+runSpout zkOpts pName partition topology inputSource uf = do
+    index <- partitionIndex inputSource partition
+    let spoutId = (pName, index)
+
     registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
         stateMVar <- newEmptyMVar
-        _ <- forkOS $ pipeThread zk stateMVar
+        _ <- forkOS $ pipeThread zk spoutId stateMVar
 
         watchMasterState zk $ \et -> case et of
             Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
@@ -54,10 +59,12 @@ runSpoutFromProducer zkOpts spoutId topology uf producer = do
     throw $ ZookeeperConnectionError
         "Spout zookeeper registration terminated unexpectedly"
   where
-    pipeThread zk stateMVar =
+    pipeThread zk spoutId stateMVar =
       let downstream = downstreamConsumer (fst spoutId) topology uf
+          producer = partitionToPayloadProducer uf $ partitionProducer inputSource partition 0
       in runEffect $
         producer >-> spoutStatePipe zk spoutId stateMVar >-> downstream
+
 
 runDownstream :: (Ord k, Monoid v, Topology t)
               => ZKOptions

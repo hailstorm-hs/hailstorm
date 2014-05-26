@@ -2,7 +2,7 @@ module Hailstorm.Clock
 ( Clock(..)
 ) where
 
-import Hailstorm.Partition
+import Hailstorm.InputSource
 import qualified Data.Map as Map
 
 newtype Clock = Clock (Map.Map Partition Offset)

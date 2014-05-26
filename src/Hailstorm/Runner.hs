@@ -5,8 +5,8 @@ import Control.Monad
 import Data.Maybe
 import Data.Monoid
 import GHC.Conc (threadStatus, ThreadStatus(..))
+import Hailstorm.InputSource
 import Hailstorm.Negotiator
-import Hailstorm.Partition
 import Hailstorm.Payload
 import Hailstorm.Processor.Runner
 import Hailstorm.Topology
@@ -49,9 +49,7 @@ localRunner zkOpts topology formula filename ispout = do
     consumerIds <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
-    let f = partitionFromFile filename
-    spoutId <- forkOS $ runSpoutFromProducer zkOpts (ispout, 0) topology formula
-      (partitionToPayloadProducer formula f)
+    spoutId <- forkOS $ runSpout zkOpts ispout filename topology (FileSource [filename]) formula
 
     let baseThreads = [(negotiatorId, "Negotiator"), (spoutId, "Spout")]
         consumerThreads = map (\tid -> (tid, show tid)) consumerIds
