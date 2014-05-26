@@ -28,7 +28,7 @@ runNegotiator zkOpts topology = do
         forceEitherIO
             (DuplicateNegotiatorError "Could not set state: duplicate process?")
             (debugSetMasterState zk Initialization) >>
-              watchLoop zk fullChildrenThreadId
+                watchLoop zk fullChildrenThreadId
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where
     fullThread zk = forever $ do
@@ -103,8 +103,8 @@ negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
         debugSetMasterState zk ValveClosed
-    offsetsAndPartitions <- untilSpoutsPaused
-    return $ Clock (Map.fromList offsetsAndPartitions)
+    partitionsAndOffsets <- untilSpoutsPaused
+    return $ Clock (Map.fromList partitionsAndOffsets)
 
     where untilSpoutsPaused = do
             stateMap <- forceEitherIO UnknownWorkerException $

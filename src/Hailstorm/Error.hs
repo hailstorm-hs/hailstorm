@@ -24,13 +24,13 @@ wrapInHSError e hs = HSErrorWrap hs (show e)
 forceEitherIO :: (Show e) => HSError -> IO (Either e a) -> IO a
 forceEitherIO mye action = do
     me <- action
-    case me of 
-        (Left e) -> throw $ HSErrorWrap mye (show e) 
-        (Right x) -> return x
+    case me of
+        Left e -> throw $ HSErrorWrap mye (show e)
+        Right x -> return x
 
 warnOnLeftIO :: (Show e) => IO (Either e a) -> IO ()
 warnOnLeftIO etAction = do
     et <- etAction
-    case et of 
-        (Left e) -> hPutStrLn stderr $ "Error: " ++ show e
+    case et of
+        Left e -> hPutStrLn stderr $ "Error: " ++ show e
         _ -> return ()
