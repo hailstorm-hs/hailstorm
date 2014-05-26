@@ -40,8 +40,7 @@ downstreamPoolConsumer processorName topology uformula = emitToNextLayer Map.emp
         let sendAddresses = downstreamAddresses topology processorName payload
             getHandle addressTuple = lift $ poolConnect addressTuple connPool
             emitToHandle h = (lift . hPutStrLn h) $
-                serialize uformula (payloadTuple payload) ++ "\1" ++
-                    show (payloadClock payload)
+                serializePayload payload uformula
         newHandles <- mapM getHandle sendAddresses
         mapM_ emitToHandle newHandles
         let newPool = Map.fromList $ zip sendAddresses newHandles

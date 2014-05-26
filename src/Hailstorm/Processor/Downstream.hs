@@ -4,15 +4,16 @@ module Hailstorm.Processor.Downstream
 ( runDownstream
 ) where
 
+import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
-import Data.List.Split
 import Data.Maybe
 import Data.Monoid
 import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
+import Hailstorm.MasterState
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
@@ -37,16 +38,20 @@ runDownstream opts dId@(dName, _) topology uformula = do
         ctype = processorType $ fromJust $ Map.lookup dName $
             processors topology
         producer = socketProducer uformula
-        consumer =
+        consumer mStateMVar =
             case ctype of
-                Bolt -> boltPipe uformula Map.empty >->
+                Bolt -> boltPipe uformula mStateMVar Map.empty >->
                     downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
                 _ -> throw $ InvalidTopologyError $
                     dName ++ " is not a downstream processor"
-        processSocket s = runEffect $ producer s >-> consumer
-    registerProcessor opts dId SinkRunning $ const $ serve HostAny port $
-        \(s, _) -> processSocket s
+        processSocket s mStateMVar = runEffect $
+            producer s >-> consumer mStateMVar
+
+    registerProcessor opts dId SinkRunning $ \zk ->
+        serve HostAny port $ \(s, _) ->
+            injectMasterState zk (processSocket s)
+
     throw $ ZookeeperConnectionError $ "Unable to register downstream " ++ dName
 
 -- | Returns a Producer that receives a stream of payloads through a given
@@ -61,25 +66,34 @@ socketProducer uformula s = do
   where
     emitNextPayload h = do
         t <- lift $ hGetLine h
-        let [sTuple, sClock] = splitOn "\1" t
-            tuple = deserialize uformula sTuple
-            clock = read sClock :: Clock
-        yield (Payload tuple clock)
+        yield $ deserializePayload t uformula
         emitNextPayload h
 
 -- | Builds a Pipe that receives a payload emitted from a handle and
 -- performs the monoidal append operation associated with the given processor.
 boltPipe :: (Ord k, Monoid v)
          => UserFormula k v
+         -> MVar MasterState
          -> BoltState k v
          -> Pipe (Payload k v) (Payload k v) IO ()
-boltPipe uformula state = do
+boltPipe uformula mStateMVar state = do
     payload <- await
+
+    -- Determine next snapshot clock, if available.
+    mState <- lift $ readMVar mStateMVar
+    case mState of
+        Flowing mClock ->
+            case mClock of
+                Just _ -> return ()
+                Nothing -> return ()
+        -- Flow should stop while master state is not Flowing
+        _ -> throw UnexpectedLeakError
+
     let (key, val) = payloadTuple payload
         oldval = Map.findWithDefault mempty key state
         newval = oldval `mappend` val
-    yield $ Payload (key, newval) (payloadClock payload)
-    boltPipe uformula $ Map.union (Map.singleton key newval) state
+    yield $ Payload (key, newval) (payloadPosition payload) $ Clock Map.empty
+    boltPipe uformula mStateMVar $ Map.union (Map.singleton key newval) state
 
 -- | Builds a Consumer that receives a payload emitted from a handle and
 -- performs the sink operation defined in the given user formula.

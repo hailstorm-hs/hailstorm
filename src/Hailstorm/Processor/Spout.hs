@@ -18,8 +18,8 @@ import Hailstorm.Topology
 import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import Pipes
-import qualified Database.Zookeeper as ZK
 import qualified Data.Map as Map
+import qualified Database.Zookeeper as ZK
 
 -- | Start processing with a spout.
 runSpout :: (Topology t, InputSource s)
@@ -67,7 +67,10 @@ spoutStatePipe zk spoutId@(partition, _) lastOffset uFormula stateMVar = do
             loop
   where passOn = do
             InputTuple bs p o <- await
-            yield $ Payload (convertFn uFormula bs) (Clock $ Map.singleton p o)
+            yield Payload { payloadTuple = convertFn uFormula bs
+                          , payloadPosition = (p, o)
+                          , payloadLowWaterMark = Clock Map.empty
+                          }
             spoutStatePipe zk spoutId o uFormula stateMVar
         loop = spoutStatePipe zk spoutId lastOffset uFormula stateMVar
 
