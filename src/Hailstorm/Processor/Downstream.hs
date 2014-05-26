@@ -26,29 +26,28 @@ import qualified Data.Map as Map
 
 type BoltState k v = Map.Map k v
 
-
 runDownstream :: (Ord k, Monoid v, Topology t)
               => ZKOptions
               -> ProcessorId
               -> t
               -> UserFormula k v
               -> IO ()
-runDownstream opts did@(dname, _) topology uformula = do
-    let (_, port) = addressFor topology did
-        ctype = processorType (fromJust $ Map.lookup dname
-            (processors topology))
+runDownstream opts dId@(dName, _) topology uformula = do
+    let (_, port) = addressFor topology dId
+        ctype = processorType $ fromJust $ Map.lookup dName $
+            processors topology
         producer = socketProducer uformula
         consumer =
             case ctype of
                 Bolt -> boltPipe uformula Map.empty >->
-                    downstreamPoolConsumer dname topology uformula
+                    downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
-                _ -> error "Non-consumer processor provided"
+                _ -> throw $ InvalidTopologyError $
+                    dName ++ " is not a downstream processor"
         processSocket s = runEffect $ producer s >-> consumer
-    registerProcessor opts did SinkRunning $ const $ serve HostAny port $
-      \(s, _) -> processSocket s
-    throw $ ZookeeperConnectionError
-        "Sink zookeeper registration terminated unexpectedly"
+    registerProcessor opts dId SinkRunning $ const $ serve HostAny port $
+        \(s, _) -> processSocket s
+    throw $ ZookeeperConnectionError $ "Unable to register downstream " ++ dName
 
 -- | Returns a Producer that receives a stream of payloads through a given
 -- socket and deserializes them.
@@ -87,5 +86,4 @@ boltPipe uformula state = do
 sinkConsumer :: UserFormula k v -> Consumer (Payload k v) IO ()
 sinkConsumer uformula = forever $ do
     payload <- await
-    lift $ outputFn uformula (payloadTuple payload)
-
+    lift $ outputFn uformula $ payloadTuple payload

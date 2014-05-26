@@ -1,25 +1,24 @@
 module Hailstorm.ZKCluster
 ( ZKOptions(..)
 , initializeCluster
-, watchProcessors
-, watchMasterState
+, getDebugInfo
+, serializeZK
+, deserializeZK
 , quietZK
 , registerProcessor
-, createMasterState
-, setMasterState
 , setProcessorState
 , getProcessorState
 , getAllProcessorStates
-, getDebugInfo
+, watchProcessors
 ) where
 
 import Control.Concurrent
 import Control.Monad
 import Hailstorm.Processor
-import Hailstorm.MasterState
 import Data.Either
 import Data.List.Split
 import Data.Map (Map)
+import System.Log.Logger
 import qualified Database.Zookeeper as ZK
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
@@ -27,10 +26,6 @@ import qualified Data.Map as Map
 
 type ProcessorAction = (ZK.Zookeeper -> IO ())
 data ZKOptions       = ZKOptions { connectionString :: String }
-
--- | Master state Zookeeper node.
-zkMasterStateNode :: String
-zkMasterStateNode = "/master_state"
 
 -- | Zookeeper node for living processors.
 zkLivingProcessorsNode :: String
@@ -56,36 +51,30 @@ registerProcessor opts pid initialState action =
         me <- ZK.create zk (zkProcessorNode pid)
             (Just $ serializeZK initialState) ZK.OpenAclUnsafe [ZK.Ephemeral]
         case me of
-            Left e  -> putStrLn $
+            Left e  -> errorM "Hailstorm.ZKCluster" $
                 "Error while registering " ++ show pid ++ ": " ++ show e
-            Right _ -> do putStrLn $ "Added to zookeeper: " ++ show pid
-                          action zk
+            Right _ -> do
+                infoM "Hailstorm.ZKCluster" $ "Registered: " ++ show pid
+                action zk
 
 -- | Initializes Zookeeper cluster for Hailstorm.
 initializeCluster :: ZKOptions -> IO ()
 initializeCluster opts = withConnection opts $ \zk -> do
     pnode <- ZK.create zk zkLivingProcessorsNode Nothing ZK.OpenAclUnsafe []
     case pnode of
-        Left e -> error $ "Error creating living processors node: " ++ show e
+        Left e -> errorM "Hailstorm.ZKCluster" $
+            "Could not create living processors node: " ++ show e
         Right _ -> return ()
 
 -- | Gets debug information from Zookeeper.
 getDebugInfo :: ZKOptions -> IO String
-getDebugInfo opts = withConnection opts $ \zk -> do
-    s1 <- getLivingProcessorsInfo zk
-    s2 <- getMasterStateInfo zk
-    return $ s1 ++ "\n" ++ s2
+getDebugInfo opts = withConnection opts $ \zk -> getLivingProcessorsInfo zk
   where
     getLivingProcessorsInfo zk = do
         me <- ZK.getChildren zk zkLivingProcessorsNode Nothing
         case me of
             Left e  -> return $ "Could not get living processors: " ++ show e
             Right p -> return $ "Living processors: " ++ show p
-    getMasterStateInfo zk = do
-        me <- ZK.get zk zkMasterStateNode Nothing
-        case me of
-            Left e  -> return $ "Could not get master state info: " ++ show e
-            Right p -> return $ "Master state: " ++ show p
 
 -- | Delivers living processors change events to the callback. Uses the same
 -- thread as was called in with.
@@ -107,41 +96,6 @@ watchProcessors zk callback = do
             Right children -> do
                 when (children /= lastChildren) (callback $ Right children)
                 childLoop childrenVar children
-
--- | Delivers master state change events to the callback. Uses the same thread
--- as was called in with.
-watchMasterState :: ZK.Zookeeper
-                   -> (Either ZK.ZKError MasterState -> IO ())
-                   -> IO ()
-watchMasterState zk callback = do
-    mVar <- newMVar True
-    _ <- ZK.get zk zkMasterStateNode (Just $ watcher mVar)
-    watchLoop mVar Unavailable
-  where
-    watcher mVar _ _ _ _ = putMVar mVar True
-    watchLoop mVar lastState = do
-        _ <- takeMVar mVar
-        me <- ZK.get zk zkMasterStateNode (Just $ watcher mVar)
-        case me of
-            Left e -> callback (Left e) >> watchLoop mVar lastState
-            Right (Just s, _) -> do
-                let ms = deserializeZK s :: MasterState
-                when (lastState /= ms) (callback $ Right ms)
-                watchLoop mVar ms
-            _ -> callback (Left ZK.NothingError) >> watchLoop mVar lastState
-
--- | Sets state of master node.
-setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
-setMasterState zk ms = ZK.set zk zkMasterStateNode
-    (Just $ serializeZK ms) Nothing
-
--- | Create an ephemeral master state node on Zookeeper.
-createMasterState :: ZK.Zookeeper
-                 -> MasterState
-                 -> IO (Either ZK.ZKError String)
-createMasterState zk ms =
-    ZK.create zk zkMasterStateNode
-        (Just $ serializeZK ms) ZK.OpenAclUnsafe [ZK.Ephemeral]
 
 -- | Sets state of processor in Zookeeper.
 setProcessorState :: ZK.Zookeeper

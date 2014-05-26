@@ -1,6 +1,6 @@
 module Hailstorm.Payload
 ( Payload(..)
-, partitionToPayloadProducer
+, payloadProducer
 ) where
 
 import Pipes
@@ -14,14 +14,12 @@ data Payload k v = Payload
     , payloadClock :: Clock
     } deriving (Eq, Show, Read)
 
-partitionToPayloadProducer :: Monad m
-                           => UserFormula k v
-                           -> Producer InputTuple m ()
-                           -> Producer (Payload k v) m ()
-partitionToPayloadProducer uformula producer =
-    let processProducer x =
-            case x of
-                InputTuple bs p o -> yield $ Payload
-                    (convertFn uformula bs) (Clock $ Map.singleton p o)
-    in for producer processProducer
+payloadProducer :: Monad m
+                => UserFormula k v
+                -> Producer InputTuple m ()
+                -> Producer (Payload k v) m ()
+payloadProducer uformula tupleProducer =
+    let processProducer (InputTuple bs p o) = yield $
+            Payload (convertFn uformula bs) (Clock $ Map.singleton p o)
+    in for tupleProducer processProducer
 

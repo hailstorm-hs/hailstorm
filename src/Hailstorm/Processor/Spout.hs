@@ -19,7 +19,7 @@ import Hailstorm.ZKCluster
 import Pipes
 import qualified Database.Zookeeper as ZK
 
--- | Start processing with a spout
+-- | Start processing with a spout.
 runSpout :: (Topology t, InputSource s)
          => ZKOptions
          -> ProcessorName
@@ -28,28 +28,19 @@ runSpout :: (Topology t, InputSource s)
          -> s
          -> UserFormula k v
          -> IO ()
-
-runSpout zkOpts pName partition topology inputSource uf = do
+runSpout zkOpts pName partition topology inputSource uFormula = do
     index <- partitionIndex inputSource partition
     let spoutId = (pName, index)
-
-    registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
-        stateMVar <- newEmptyMVar
-        _ <- forkOS $ pipeThread zk spoutId stateMVar
-
-        watchMasterState zk $ \et -> case et of
-            Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
-            Right ms -> do
-                putStrLn $ "Spout: detected master state change to " ++ show ms
-                tryTakeMVar stateMVar >> putMVar stateMVar ms -- Overwrite
-    throw $ ZookeeperConnectionError
-        "Spout zookeeper registration terminated unexpectedly"
+    registerProcessor zkOpts spoutId SpoutRunning $ \zk ->
+        injectMasterState zk (pipeThread zk spoutId)
+    throw $ ZookeeperConnectionError $ "Unable to register spout " ++ pName
   where
     pipeThread zk spoutId stateMVar =
-      let downstream = downstreamPoolConsumer (fst spoutId) topology uf
-          producer = partitionToPayloadProducer uf $ partitionProducer inputSource partition 0
+      let downstream = downstreamPoolConsumer (fst spoutId) topology uFormula
+          producer = payloadProducer uFormula $
+              partitionProducer inputSource partition 0
       in runEffect $
-        producer >-> spoutStatePipe zk spoutId stateMVar >-> downstream
+          producer >-> spoutStatePipe zk spoutId stateMVar >-> downstream
 
 spoutStatePipe :: ZK.Zookeeper
                -> ProcessorId
@@ -59,7 +50,7 @@ spoutStatePipe zk spoutId stateMVar = forever $ do
     ms <- lift $ readMVar stateMVar
     case ms of
         Flowing _ -> passOn
-        SpoutsPaused ->  do
+        Blocked ->  do
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId $ SpoutPaused "fun" 0)
             lift $ pauseUntilFlowing stateMVar
