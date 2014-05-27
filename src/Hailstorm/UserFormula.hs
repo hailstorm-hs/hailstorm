@@ -3,6 +3,7 @@ module Hailstorm.UserFormula where
 
 import Data.Monoid
 import qualified Data.ByteString as B
+import qualified Data.Map as Map
 
 -- | A formula for stream computation over key-value tuples. Keys @k@ must
 -- be of instances of Ord and values @v@ must be instances of Monoid.
@@ -14,6 +15,7 @@ data UserFormula k v = (Show k, Show v, Read k, Read v, Ord k, Monoid v) =>
   , outputFn  :: (k,v) -> IO ()
   , serialize :: (k,v) -> String
   , deserialize :: String -> (k, v)
+  , deserializeState :: String -> Map.Map k v
   }
 
 -- | Formula that defaults serialize / deserialize to read and show.
@@ -25,4 +27,5 @@ newUserFormula convert output = UserFormula { convertFn = convert
                                             , outputFn = output
                                             , serialize = show
                                             , deserialize = read
+                                            , deserializeState = read
                                             }

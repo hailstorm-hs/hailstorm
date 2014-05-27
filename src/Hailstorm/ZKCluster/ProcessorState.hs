@@ -25,6 +25,7 @@ data ProcessorState = BoltRunning
                     | SinkRunning
                     | SpoutPaused Partition Offset
                     | SpoutRunning
+                    | BoltSaved Clock
                     | UnspecifiedState
                       deriving (Eq, Show, Read)
 

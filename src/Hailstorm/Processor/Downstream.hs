@@ -1,10 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 module Hailstorm.Processor.Downstream
-( runDownstream
+( BoltState
+, runDownstream
 ) where
 
 import Control.Concurrent hiding (yield)
+import Control.Applicative
 import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
@@ -16,6 +18,8 @@ import Hailstorm.Error
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
+import Hailstorm.SnapshotStore
+import Hailstorm.SnapshotStore.DirSnapshotStore
 import Hailstorm.Topology
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.MasterState
@@ -23,12 +27,15 @@ import Hailstorm.ZKCluster.ProcessorState
 import Network.Simple.TCP
 import Network.Socket(socketToHandle)
 import Pipes
+import System.Environment
+import System.FilePath
 import System.IO
 import qualified Data.Map as Map
+import qualified Database.Zookeeper as ZK
 
 type BoltState k v = Map.Map k v
 
-runDownstream :: (Ord k, Monoid v, Topology t)
+runDownstream :: (Ord k, Monoid v, Topology t, Show k, Show v)
               => ZKOptions
               -> ProcessorId
               -> t
@@ -39,19 +46,20 @@ runDownstream opts dId@(dName, _) topology uformula = do
         ctype = processorType $ fromJust $ Map.lookup dName $
             processors topology
         producer = socketProducer uformula
-        consumer mStateMVar =
+        consumer zk mStateMVar =
             case ctype of
-                Bolt -> boltPipe dName uformula mStateMVar Map.empty Map.empty >->
-                    downstreamPoolConsumer dName topology uformula
+                Bolt ->
+                    boltPipe dId zk uformula mStateMVar Map.empty Map.empty >->
+                        downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
                 _ -> throw $ InvalidTopologyError $
                     dName ++ " is not a downstream processor"
-        processSocket s mStateMVar = runEffect $
-            producer s >-> consumer mStateMVar
+        processSocket s zk mStateMVar = runEffect $
+            producer s >-> consumer zk mStateMVar
 
     registerProcessor opts dId SinkRunning $ \zk ->
         serve HostAny port $ \(s, _) ->
-            injectMasterState zk (processSocket s)
+            injectMasterState zk (processSocket s zk)
 
     throw $ ZookeeperConnectionError $ "Unable to register downstream " ++ dName
 
@@ -72,14 +80,15 @@ socketProducer uformula s = do
 
 -- | Builds a Pipe that receives a payload emitted from a handle and
 -- performs the monoidal append operation associated with the given processor.
-boltPipe :: (Ord k, Monoid v)
-         => ProcessorName
+boltPipe :: (Ord k, Monoid v, Show k, Show v)
+         => ProcessorId
+         -> ZK.Zookeeper
          -> UserFormula k v
          -> MVar MasterState
          -> BoltState k v
          -> BoltState k v
          -> Pipe (Payload k v) (Payload k v) IO ()
-boltPipe bName uformula mStateMVar preSnapshotState postSnapshotState = do
+boltPipe bId@(bName, _) zk uformula mStateMVar preSnapState postSnapState = do
     payload <- await
 
     let (key, val) = payloadTuple payload
@@ -101,10 +110,11 @@ boltPipe bName uformula mStateMVar preSnapshotState postSnapshotState = do
 
             if canSnapshot nextSnapshotClock
                 then do
-                    lift $ saveSnapshot stateA $ fromJust nextSnapshotClock
-                    boltPipe bName uformula mStateMVar
+                    void <$> lift $ saveState bId zk stateA $
+                        fromJust nextSnapshotClock
+                    boltPipe bId zk uformula mStateMVar
                         (stateA `mergeStates` stateB) Map.empty
-                else boltPipe bName uformula mStateMVar stateA stateB
+                else boltPipe bId zk uformula mStateMVar stateA stateB
 
     -- Determine next snapshot clock, if available.
     mState <- lift $ readMVar mStateMVar
@@ -112,12 +122,12 @@ boltPipe bName uformula mStateMVar preSnapshotState postSnapshotState = do
         Just desiredClock@(Clock clockMap) -> do
             let desiredOffset = clockMap Map.! partition
             if offset > desiredOffset
-                then let b' = mergeWithTuple postSnapshotState (key, val)
-                     in passOn preSnapshotState b' (Just desiredClock)
-                else let a' = mergeWithTuple preSnapshotState (key, val)
-                     in passOn a' postSnapshotState (Just desiredClock)
+                then let b' = mergeWithTuple postSnapState (key, val)
+                     in passOn preSnapState b' (Just desiredClock)
+                else let a' = mergeWithTuple preSnapState (key, val)
+                     in passOn a' postSnapState (Just desiredClock)
         Nothing ->
-            let mergedState = preSnapshotState `mergeStates` postSnapshotState
+            let mergedState = preSnapState `mergeStates` postSnapState
             in passOn (mergeWithTuple mergedState (key, val)) Map.empty Nothing
   where
     getNextSnapshotClock (Flowing (Just clk)) = Just clk
@@ -135,9 +145,17 @@ boltPipe bName uformula mStateMVar preSnapshotState postSnapshotState = do
         in (Map.keys clk1 == Map.keys clk2) &&
             (Map.elems clk1 `gtElems` Map.elems clk2)
 
--- TODO: fork new OS thread and save to disk
-saveSnapshot :: BoltState k v -> Clock -> IO ()
-saveSnapshot _ _ = return ()
+saveState :: (Show k, Show v)
+          => ProcessorId
+          -> ZK.Zookeeper
+          -> BoltState k v
+          -> Clock
+          -> IO ThreadId
+saveState pId zk bState clk = forkOS $ do
+    home <- getEnv "HOME"
+    saveSnapshot (DirSnapshotStore $ home </> "store") pId bState clk
+    void <$> forceEitherIO UnknownWorkerException $
+        setProcessorState zk pId (BoltSaved clk)
 
 -- | Builds a Consumer that receives a payload emitted from a handle and
 -- performs the sink operation defined in the given user formula.

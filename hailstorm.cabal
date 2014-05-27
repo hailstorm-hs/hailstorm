@@ -32,6 +32,8 @@ library
     Hailstorm.Processor.Spout
     Hailstorm.Runner
     Hailstorm.Sample.WordCountSample
+    Hailstorm.SnapshotStore
+    Hailstorm.SnapshotStore.DirSnapshotStore
     Hailstorm.Topology
     Hailstorm.Topology.HardcodedTopology
     Hailstorm.UserFormula
