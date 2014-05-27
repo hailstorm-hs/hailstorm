@@ -4,7 +4,7 @@ import Control.Concurrent
 import Control.Monad
 import Data.Maybe
 import Data.Monoid
-import GHC.Conc (threadStatus, ThreadStatus(..))
+import Hailstorm.Concurrency
 import Hailstorm.InputSource
 import Hailstorm.Negotiator
 import Hailstorm.Processor.Spout
@@ -17,8 +17,6 @@ import System.IO
 
 import qualified Data.Map as Map
 
-threadDead :: ThreadId -> IO Bool
-threadDead = fmap (\x -> x == ThreadDied || x == ThreadFinished) . threadStatus
 
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 -- TODO: I'm making this hardcoded topology-specific pending

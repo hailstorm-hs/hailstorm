@@ -19,15 +19,16 @@ library
   hs-source-dirs: src
   exposed-modules:
     Hailstorm.Clock
+    Hailstorm.Concurrency
     Hailstorm.Error
     Hailstorm.InputSource
     Hailstorm.MasterState
     Hailstorm.Negotiator
     Hailstorm.Payload
     Hailstorm.Processor
-    Hailstorm.Processor.Spout
     Hailstorm.Processor.Downstream
     Hailstorm.Processor.Pool
+    Hailstorm.Processor.Spout
     Hailstorm.Runner
     Hailstorm.Sample.WordCountSample
     Hailstorm.Topology
@@ -49,6 +50,7 @@ library
    , unix
    , transformers
    , either
+   , monad-loops
   default-language:    Haskell2010
   ghc-options: -Wall -threaded
 
@@ -70,6 +72,7 @@ executable hailstorm
    , hzk
    , options
    , unix
+   , monad-loops
   Other-Modules: Hailstorm.UserFormula
   default-language: Haskell2010
   ghc-options: -Wall -threaded

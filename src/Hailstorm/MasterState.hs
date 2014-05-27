@@ -1,6 +1,7 @@
 module Hailstorm.MasterState
 ( MasterState(..)
 , injectMasterState
+, watchMasterState
 , setMasterState
 , createMasterState
 ) where

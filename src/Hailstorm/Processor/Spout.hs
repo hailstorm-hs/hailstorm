@@ -7,7 +7,9 @@ import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
 import Data.ByteString.Char8 ()
+import Data.IORef
 import Hailstorm.Clock
+import Hailstorm.Concurrency
 import Hailstorm.Error
 import Hailstorm.InputSource
 import Hailstorm.MasterState
@@ -20,6 +22,10 @@ import Hailstorm.ZKCluster
 import Pipes
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
+import qualified System.Log.Logger as L
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.Processor.Spout"
 
 -- | Start processing with a spout.
 runSpout :: (Topology t, InputSource s)
@@ -33,15 +39,34 @@ runSpout :: (Topology t, InputSource s)
 runSpout zkOpts pName partition topology inputSource uFormula = do
     index <- partitionIndex inputSource partition
     let spoutId = (pName, index)
-    registerProcessor zkOpts spoutId SpoutRunning $ \zk ->
-        injectMasterState zk (pipeThread zk spoutId)
+    registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
+        masterStateMVar <- newEmptyMVar
+        tid <- forkOS $ pipeThread zk spoutId masterStateMVar 0
+        spoutRunnerIdRef <- newIORef tid
+
+        watchMasterState zk $ \et -> case et of
+            Left e -> throw $ HSErrorWrap UnexpectedZookeeperError (show e)
+
+            Right (SpoutsRewind (Clock pMap)) -> do
+                oldTid <- readIORef spoutRunnerIdRef
+                infoM $ "Rewind detected, killing thread=" ++ show oldTid
+                killThread oldTid
+                waitForThreadDead oldTid
+                let newOffset = pMap Map.! partition
+                newTid <- forkOS $ pipeThread zk spoutId masterStateMVar newOffset
+                infoM $ "Rewound thread to " ++ show (partition, newOffset)
+                writeIORef spoutRunnerIdRef newTid
+
+            Right ms -> signalState masterStateMVar ms
+
     throw $ ZookeeperConnectionError $ "Unable to register spout " ++ pName
   where
-    pipeThread zk spoutId stateMVar =
+    signalState mVar ms = tryTakeMVar mVar >> putMVar mVar ms 
+    pipeThread zk spoutId stateMVar offset =
       let downstream = downstreamPoolConsumer pName topology uFormula
-          producer = partitionProducer inputSource partition 0
+          producer = partitionProducer inputSource partition offset
       in runEffect $
-        producer >-> spoutStatePipe zk spoutId partition 0 uFormula stateMVar >-> downstream
+        producer >-> spoutStatePipe zk spoutId partition offset uFormula stateMVar >-> downstream
 
 spoutStatePipe :: ZK.Zookeeper
                -> ProcessorId
