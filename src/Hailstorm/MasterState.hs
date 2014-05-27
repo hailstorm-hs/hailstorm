@@ -21,7 +21,8 @@ zkMasterStateNode = "/master_state"
 
 data MasterState = Unavailable
                  | Initialization
-                 | Blocked
+                 | SpoutsRewind Clock
+                 | SpoutsPaused 
                  | Flowing (Maybe Clock)
                    deriving (Eq, Read, Show)
 

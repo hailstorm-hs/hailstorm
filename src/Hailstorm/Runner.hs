@@ -34,10 +34,11 @@ localRunner zkOpts topology formula filename ispout = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     quietZK
+    let source = FileSource [filename]
 
     putStrLn "Running in local mode..."
 
-    negotiatorId <- forkOS $ runNegotiator zkOpts topology
+    negotiatorId <- forkOS $ runNegotiator zkOpts topology source
     putStrLn $ "Spawned negotiator" ++ show negotiatorId
     threadDelay 1000000
 
@@ -49,7 +50,7 @@ localRunner zkOpts topology formula filename ispout = do
     consumerIds <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
-    spoutId <- forkOS $ runSpout zkOpts ispout filename topology (FileSource [filename]) formula
+    spoutId <- forkOS $ runSpout zkOpts ispout filename topology source formula
 
     let baseThreads = [(negotiatorId, "Negotiator"), (spoutId, "Spout")]
         consumerThreads = map (\tid -> (tid, show tid)) consumerIds

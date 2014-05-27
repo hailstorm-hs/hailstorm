@@ -8,8 +8,9 @@ import Control.Exception
 import Control.Monad
 import Data.IORef
 import Hailstorm.Clock
-import Hailstorm.MasterState
+import Hailstorm.InputSource
 import Hailstorm.Error
+import Hailstorm.MasterState
 import Hailstorm.Processor
 import Hailstorm.Topology
 import Hailstorm.ZKCluster
@@ -17,8 +18,8 @@ import qualified Data.Foldable as Foldable
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
 
-runNegotiator :: Topology t => ZKOptions -> t -> IO ()
-runNegotiator zkOpts topology = do
+runNegotiator :: (Topology t, InputSource s) => ZKOptions -> t -> s -> IO ()
+runNegotiator zkOpts topology inputSource = do
     fullChildrenThreadId <- newIORef (Nothing :: Maybe ThreadId)
     registerProcessor zkOpts ("negotiator", 0) UnspecifiedState $ \zk ->
         forceEitherIO
@@ -27,12 +28,19 @@ runNegotiator zkOpts topology = do
                 watchLoop zk fullChildrenThreadId
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where
-    fullThread zk = forever $ do
-        waitUntilSnapshotsComplete zk topology
-        threadDelay $ 1000 * 1000 * 5
-        nextSnapshotClock <- negotiateSnapshot zk topology
-        void <$> forceEitherIO UnknownWorkerException $
-            debugSetMasterState zk $ Flowing (Just nextSnapshotClock)
+    fullThread zk = do
+        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ Initialization
+        clock <- startClock inputSource -- TODO: get starting point by asking for the bolt's snapshot clock
+        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ SpoutsRewind clock
+        _ <- untilSpoutsPaused zk topology
+        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ Flowing Nothing
+
+        forever $ do
+            waitUntilSnapshotsComplete zk topology
+            threadDelay $ 1000 * 1000 * 5
+            nextSnapshotClock <- negotiateSnapshot zk topology
+            void <$> forceEitherIO UnknownWorkerException $
+                debugSetMasterState zk $ Flowing (Just nextSnapshotClock)
 
     watchLoop zk fullThreadId = watchProcessors zk $ \childrenEither ->
         case childrenEither of
@@ -71,16 +79,18 @@ waitUntilSnapshotsComplete _ _ = return ()
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
-        debugSetMasterState zk Blocked
-    partitionsAndOffsets <- untilSpoutsPaused
-    return $ Clock (Map.fromList partitionsAndOffsets)
+        debugSetMasterState zk SpoutsPaused
+    partitionsAndOffsets <- untilSpoutsPaused zk t
+    return $ Clock $ Map.fromList $ partitionsAndOffsets
 
-    where untilSpoutsPaused = do
-            stateMap <- forceEitherIO UnknownWorkerException $
-                getAllProcessorStates zk
-            let spoutStates = map (\k -> stateMap Map.! k ) (spoutIds t)
-                spoutsPaused = [(p,o) | (SpoutPaused p o) <- spoutStates]
 
-            if length spoutsPaused == length spoutStates
-                then return spoutsPaused
-                else untilSpoutsPaused
+untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]
+untilSpoutsPaused zk t = do
+    stateMap <- forceEitherIO UnknownWorkerException $
+        getAllProcessorStates zk
+    let spoutStates = map (\k -> stateMap Map.! k ) (spoutIds t)
+        spoutsPaused = [(p,o) | (SpoutPaused p o) <- spoutStates]
+
+    if length spoutsPaused == length spoutStates
+        then return spoutsPaused
+        else untilSpoutsPaused zk t

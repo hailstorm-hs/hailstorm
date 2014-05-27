@@ -10,20 +10,20 @@ module Hailstorm.InputSource
 import Control.Monad
 import Data.Maybe
 import Data.List hiding (partition)
+import Hailstorm.Clock
 import Pipes
 import System.IO
 
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Char8 as C8
-
-type Partition = String
-type Offset = Integer
+import qualified Data.Map as Map
 
 data InputTuple = InputTuple BS.ByteString Partition Offset
 
 class InputSource s where
     partitionProducer :: s -> Partition -> Offset -> Producer InputTuple IO ()
     allPartitions :: s -> IO [Partition]
+    startClock :: s -> IO (Clock)
 
 partitionIndex :: (InputSource s) => s -> Partition -> IO Int
 partitionIndex s p = allPartitions s  >>= \ps -> return $ fromJust $ elemIndex p ps
@@ -44,6 +44,7 @@ instance InputSource FileSource where
         cyclicalHandleProducer h2 partition offset
 
     allPartitions (FileSource paths) = return $ sort paths
+    startClock s = allPartitions s >>= \ps ->  return $ Clock $ Map.fromList $ zip ps (repeat 0) 
 
 
 -- | Quickly counts the number of lines in a file

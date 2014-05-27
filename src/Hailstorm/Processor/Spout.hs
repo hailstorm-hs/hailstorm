@@ -54,17 +54,12 @@ spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar = do
     ms <- lift $ readMVar stateMVar
     case ms of
         Flowing _ -> passOn
-        Blocked ->  do
+        _ ->  do
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId $ SpoutPaused partition lastOffset)
             lift $ pauseUntilFlowing stateMVar
             void <$> lift $ forceEitherIO UnknownWorkerException
                 (setProcessorState zk spoutId SpoutRunning)
-            loop
-        _ -> do
-            lift $ putStrLn $
-                "Spout waiting for open valve (state: " ++ show ms ++ ")"
-            lift $ threadDelay $ 1000 * 1000 * 10
             loop
 
   where
