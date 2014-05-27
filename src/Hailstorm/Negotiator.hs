@@ -7,7 +7,6 @@ import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
 import Data.IORef
-import Data.Maybe
 import Hailstorm.Clock
 import Hailstorm.MasterState
 import Hailstorm.Error

@@ -82,7 +82,7 @@ boltPipe uformula mStateMVar preSnapshotState postSnapshotState = do
 
     let (key, val) = payloadTuple payload
         (partition, offset) = payloadPosition payload
-        calcLowWaterMark = id -- TODO: calculate
+        calcLowWaterMarkMap = id -- TODO: calculate
         mergeWithVal st = Map.unionWith mappend st $ Map.singleton key val
         mergeStates = Map.unionWith mappend
         passOnWithSnapshot stateA stateB = do
@@ -90,8 +90,8 @@ boltPipe uformula mStateMVar preSnapshotState postSnapshotState = do
                 valB = Map.findWithDefault mempty key stateB
             yield Payload { payloadTuple = (key, valA `mappend` valB)
                           , payloadPosition = payloadPosition payload
-                          , payloadLowWaterMark = calcLowWaterMark $
-                              payloadLowWaterMark payload
+                          , payloadLowWaterMarkMap = calcLowWaterMarkMap $
+                              payloadLowWaterMarkMap payload
                           }
             -- TODO: save snapshot.
             boltPipe uformula mStateMVar stateA stateB
@@ -99,8 +99,8 @@ boltPipe uformula mStateMVar preSnapshotState postSnapshotState = do
             let val' = Map.findWithDefault mempty key st
             yield Payload { payloadTuple = (key, val')
                           , payloadPosition = payloadPosition payload
-                          , payloadLowWaterMark = calcLowWaterMark $
-                              payloadLowWaterMark payload
+                          , payloadLowWaterMarkMap = calcLowWaterMarkMap $
+                              payloadLowWaterMarkMap payload
                           }
             boltPipe uformula mStateMVar st Map.empty
 
@@ -119,8 +119,8 @@ boltPipe uformula mStateMVar preSnapshotState postSnapshotState = do
                 Nothing -> passOnNoSnapshot $ mergeWithVal
                     (preSnapshotState `mergeStates` postSnapshotState)
 
-        -- Flow should stop while master state is not Flowing
-        _ -> throw UnexpectedLeakError
+        _ -> passOnNoSnapshot $ mergeWithVal
+            (preSnapshotState `mergeStates` postSnapshotState)
 
 -- | Builds a Consumer that receives a payload emitted from a handle and
 -- performs the sink operation defined in the given user formula.

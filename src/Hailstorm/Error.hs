@@ -12,7 +12,6 @@ import System.IO
 
 data HSError = UnknownWorkerException
              | UnexpectedZookeeperError
-             | UnexpectedLeakError
              | InvalidTopologyError String
              | DuplicateNegotiatorError String
              | ZookeeperConnectionError String

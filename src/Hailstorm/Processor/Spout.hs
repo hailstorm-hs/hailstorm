@@ -72,7 +72,8 @@ spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar = do
         InputTuple bs p o <- await
         yield Payload { payloadTuple = convertFn uFormula bs
                       , payloadPosition = (p, o)
-                      , payloadLowWaterMark = Clock $ Map.singleton p o
+                      , payloadLowWaterMarkMap = Map.singleton partition $
+                          Clock $ Map.singleton p o
                       }
         spoutStatePipe zk spoutId partition o uFormula stateMVar
     loop = spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar
