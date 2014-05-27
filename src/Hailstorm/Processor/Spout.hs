@@ -65,14 +65,16 @@ spoutStatePipe zk spoutId@(partition, _) lastOffset uFormula stateMVar = do
                 "Spout waiting for open valve (state: " ++ show ms ++ ")"
             lift $ threadDelay $ 1000 * 1000 * 10
             loop
-  where passOn = do
-            InputTuple bs p o <- await
-            yield Payload { payloadTuple = convertFn uFormula bs
-                          , payloadPosition = (p, o)
-                          , payloadLowWaterMark = Clock Map.empty
-                          }
-            spoutStatePipe zk spoutId o uFormula stateMVar
-        loop = spoutStatePipe zk spoutId lastOffset uFormula stateMVar
+
+  where
+    passOn = do
+        InputTuple bs p o <- await
+        yield Payload { payloadTuple = convertFn uFormula bs
+                      , payloadPosition = (p, o)
+                      , payloadLowWaterMark = Clock $ Map.singleton p o
+                      }
+        spoutStatePipe zk spoutId o uFormula stateMVar
+    loop = spoutStatePipe zk spoutId lastOffset uFormula stateMVar
 
 pauseUntilFlowing :: MVar MasterState -> IO ()
 pauseUntilFlowing stateMVar = do

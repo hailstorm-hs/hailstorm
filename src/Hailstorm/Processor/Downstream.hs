@@ -40,7 +40,7 @@ runDownstream opts dId@(dName, _) topology uformula = do
         producer = socketProducer uformula
         consumer mStateMVar =
             case ctype of
-                Bolt -> boltPipe uformula mStateMVar Map.empty >->
+                Bolt -> boltPipe uformula mStateMVar Map.empty Map.empty >->
                     downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
                 _ -> throw $ InvalidTopologyError $
@@ -75,25 +75,52 @@ boltPipe :: (Ord k, Monoid v)
          => UserFormula k v
          -> MVar MasterState
          -> BoltState k v
+         -> BoltState k v
          -> Pipe (Payload k v) (Payload k v) IO ()
-boltPipe uformula mStateMVar state = do
+boltPipe uformula mStateMVar preSnapshotState postSnapshotState = do
     payload <- await
+
+    let (key, val) = payloadTuple payload
+        (partition, offset) = payloadPosition payload
+        calcLowWaterMark = id -- TODO: calculate
+        mergeWithVal st = Map.unionWith mappend st $ Map.singleton key val
+        mergeStates = Map.unionWith mappend
+        passOnWithSnapshot stateA stateB = do
+            let valA = Map.findWithDefault mempty key stateA
+                valB = Map.findWithDefault mempty key stateB
+            yield Payload { payloadTuple = (key, valA `mappend` valB)
+                          , payloadPosition = payloadPosition payload
+                          , payloadLowWaterMark = calcLowWaterMark $
+                              payloadLowWaterMark payload
+                          }
+            -- TODO: save snapshot.
+            boltPipe uformula mStateMVar stateA stateB
+        passOnNoSnapshot st = do
+            let val' = Map.findWithDefault mempty key st
+            yield Payload { payloadTuple = (key, val')
+                          , payloadPosition = payloadPosition payload
+                          , payloadLowWaterMark = calcLowWaterMark $
+                              payloadLowWaterMark payload
+                          }
+            boltPipe uformula mStateMVar st Map.empty
 
     -- Determine next snapshot clock, if available.
     mState <- lift $ readMVar mStateMVar
     case mState of
         Flowing mClock ->
             case mClock of
-                Just _ -> return ()
-                Nothing -> return ()
+                Just (Clock nextSnapshotMap) -> do
+                    let desiredOffset = nextSnapshotMap Map.! partition
+                    if offset > desiredOffset
+                        then passOnWithSnapshot preSnapshotState
+                            (mergeWithVal postSnapshotState)
+                        else passOnWithSnapshot (mergeWithVal preSnapshotState)
+                            postSnapshotState
+                Nothing -> passOnNoSnapshot $ mergeWithVal
+                    (preSnapshotState `mergeStates` postSnapshotState)
+
         -- Flow should stop while master state is not Flowing
         _ -> throw UnexpectedLeakError
-
-    let (key, val) = payloadTuple payload
-        oldval = Map.findWithDefault mempty key state
-        newval = oldval `mappend` val
-    yield $ Payload (key, newval) (payloadPosition payload) $ Clock Map.empty
-    boltPipe uformula mStateMVar $ Map.union (Map.singleton key newval) state
 
 -- | Builds a Consumer that receives a payload emitted from a handle and
 -- performs the sink operation defined in the given user formula.
