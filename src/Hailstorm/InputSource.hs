@@ -2,8 +2,6 @@ module Hailstorm.InputSource
 ( InputSource(..)
 , InputTuple(..)
 , FileSource(..)
-, Partition
-, Offset
 , partitionIndex
 ) where
 
@@ -23,7 +21,7 @@ data InputTuple = InputTuple BS.ByteString Partition Offset
 class InputSource s where
     partitionProducer :: s -> Partition -> Offset -> Producer InputTuple IO ()
     allPartitions :: s -> IO [Partition]
-    startClock :: s -> IO (Clock)
+    startClock :: s -> IO Clock
 
 partitionIndex :: (InputSource s) => s -> Partition -> IO Int
 partitionIndex s p = allPartitions s  >>= \ps -> return $ fromJust $ elemIndex p ps
@@ -44,7 +42,7 @@ instance InputSource FileSource where
         cyclicalHandleProducer h2 partition offset
 
     allPartitions (FileSource paths) = return $ sort paths
-    startClock s = allPartitions s >>= \ps ->  return $ Clock $ Map.fromList $ zip ps (repeat 0) 
+    startClock s = allPartitions s >>= \ps ->  return $ Clock $ Map.fromList $ zip ps (repeat 0)
 
 
 -- | Quickly counts the number of lines in a file

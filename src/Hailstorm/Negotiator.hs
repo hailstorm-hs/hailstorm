@@ -10,10 +10,10 @@ import Data.IORef
 import Hailstorm.Clock
 import Hailstorm.InputSource
 import Hailstorm.Error
-import Hailstorm.MasterState
-import Hailstorm.Processor
-import Hailstorm.Topology
 import Hailstorm.ZKCluster
+import Hailstorm.ZKCluster.MasterState
+import Hailstorm.ZKCluster.ProcessorState
+import Hailstorm.Topology
 import qualified Data.Foldable as Foldable
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK

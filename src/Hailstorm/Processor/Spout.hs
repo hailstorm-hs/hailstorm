@@ -12,13 +12,14 @@ import Hailstorm.Clock
 import Hailstorm.Concurrency
 import Hailstorm.Error
 import Hailstorm.InputSource
-import Hailstorm.MasterState
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
 import Hailstorm.Topology
 import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
+import Hailstorm.ZKCluster.MasterState
+import Hailstorm.ZKCluster.ProcessorState
 import Pipes
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK

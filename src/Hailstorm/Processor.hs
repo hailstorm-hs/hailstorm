@@ -1,6 +1,5 @@
 module Hailstorm.Processor
 ( Processor(..)
-, ProcessorState(..)
 , ProcessorType(..)
 , ProcessorName
 , ProcessorInstance
@@ -8,19 +7,11 @@ module Hailstorm.Processor
 , mkProcessorMap
 ) where
 
-import Hailstorm.InputSource
 import qualified Data.Map as Map
 
 type ProcessorInstance = Int
 type ProcessorName = String
 type ProcessorId = (ProcessorName, ProcessorInstance)
-
-data ProcessorState = BoltRunning
-                    | SinkRunning
-                    | SpoutPaused Partition Offset
-                    | SpoutRunning
-                    | UnspecifiedState
-                      deriving (Eq, Show, Read)
 
 data ProcessorType = Spout | Bolt | Sink
                      deriving (Eq, Show, Read)

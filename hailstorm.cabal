@@ -22,7 +22,7 @@ library
     Hailstorm.Concurrency
     Hailstorm.Error
     Hailstorm.InputSource
-    Hailstorm.MasterState
+    Hailstorm.Logging
     Hailstorm.Negotiator
     Hailstorm.Payload
     Hailstorm.Processor
@@ -34,6 +34,8 @@ library
     Hailstorm.Topology
     Hailstorm.UserFormula
     Hailstorm.ZKCluster
+    Hailstorm.ZKCluster.MasterState
+    Hailstorm.ZKCluster.ProcessorState
   build-depends:
      base >=4.6
    , bytestring

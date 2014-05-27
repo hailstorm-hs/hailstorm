@@ -1,4 +1,4 @@
-module Hailstorm.MasterState
+module Hailstorm.ZKCluster.MasterState
 ( MasterState(..)
 , injectMasterState
 , watchMasterState
@@ -23,7 +23,7 @@ zkMasterStateNode = "/master_state"
 data MasterState = Unavailable
                  | Initialization
                  | SpoutsRewind Clock
-                 | SpoutsPaused 
+                 | SpoutsPaused
                  | Flowing (Maybe Clock)
                    deriving (Eq, Read, Show)
 

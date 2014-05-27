@@ -4,6 +4,7 @@ import Control.Applicative
 import Options
 import Hailstorm.Sample.WordCountSample
 import Hailstorm.ZKCluster
+import Hailstorm.ZKCluster.ProcessorState
 import Hailstorm.Logging
 import System.FilePath
 import System.Environment

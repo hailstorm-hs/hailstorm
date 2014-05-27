@@ -13,12 +13,13 @@ import Data.Monoid
 import Hailstorm.UserFormula
 import Hailstorm.Clock
 import Hailstorm.Error
-import Hailstorm.MasterState
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
 import Hailstorm.Topology
 import Hailstorm.ZKCluster
+import Hailstorm.ZKCluster.MasterState
+import Hailstorm.ZKCluster.ProcessorState
 import Network.Simple.TCP
 import Network.Socket(socketToHandle)
 import Pipes
