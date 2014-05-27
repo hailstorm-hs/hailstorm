@@ -79,9 +79,9 @@ negotiateSnapshot zk t = do
     where untilSpoutsPaused = do
             stateMap <- forceEitherIO UnknownWorkerException $
                 getAllProcessorStates zk
-            let spoutStates = map (\k -> fromJust $ Map.lookup k stateMap)
-                    (spoutIds t)
+            let spoutStates = map (\k -> stateMap Map.! k ) (spoutIds t)
                 spoutsPaused = [(p,o) | (SpoutPaused p o) <- spoutStates]
+
             if length spoutsPaused == length spoutStates
                 then return spoutsPaused
                 else untilSpoutsPaused

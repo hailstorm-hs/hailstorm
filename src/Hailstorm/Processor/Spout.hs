@@ -38,18 +38,19 @@ runSpout zkOpts pName partition topology inputSource uFormula = do
     throw $ ZookeeperConnectionError $ "Unable to register spout " ++ pName
   where
     pipeThread zk spoutId stateMVar =
-      let downstream = downstreamPoolConsumer (fst spoutId) topology uFormula
+      let downstream = downstreamPoolConsumer pName topology uFormula
           producer = partitionProducer inputSource partition 0
       in runEffect $
-        producer >-> spoutStatePipe zk spoutId 0 uFormula stateMVar >-> downstream
+        producer >-> spoutStatePipe zk spoutId partition 0 uFormula stateMVar >-> downstream
 
 spoutStatePipe :: ZK.Zookeeper
                -> ProcessorId
+               -> Partition
                -> Offset
                -> UserFormula k v
                -> MVar MasterState
                -> Pipe InputTuple (Payload k v) IO ()
-spoutStatePipe zk spoutId@(partition, _) lastOffset uFormula stateMVar = do
+spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar = do
     ms <- lift $ readMVar stateMVar
     case ms of
         Flowing _ -> passOn
@@ -73,8 +74,8 @@ spoutStatePipe zk spoutId@(partition, _) lastOffset uFormula stateMVar = do
                       , payloadPosition = (p, o)
                       , payloadLowWaterMark = Clock $ Map.singleton p o
                       }
-        spoutStatePipe zk spoutId o uFormula stateMVar
-    loop = spoutStatePipe zk spoutId lastOffset uFormula stateMVar
+        spoutStatePipe zk spoutId partition o uFormula stateMVar
+    loop = spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar
 
 pauseUntilFlowing :: MVar MasterState -> IO ()
 pauseUntilFlowing stateMVar = do
