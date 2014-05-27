@@ -7,7 +7,6 @@ module Hailstorm.Payload
 import Data.List
 import Data.List.Split
 import Hailstorm.Clock
-import Hailstorm.InputSource
 import Hailstorm.UserFormula
 import Hailstorm.Processor
 import qualified Data.Map as Map
