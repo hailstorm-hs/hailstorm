@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module Hailstorm.Processor.Downstream
 ( BoltState
 , runDownstream
