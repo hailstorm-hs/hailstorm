@@ -3,6 +3,7 @@ module Hailstorm.Clock
 , Partition
 , Offset
 , extractClockMap
+, clockGt
 ) where
 
 import qualified Data.Map as Map
@@ -15,3 +16,13 @@ newtype Clock = Clock (Map.Map Partition Offset)
 
 extractClockMap :: Clock -> Map.Map Partition Offset
 extractClockMap (Clock clk) = clk
+
+-- | @c1 `clockGt` @c2@ returns true if @c1@ has the same elements
+-- as @c2@ and is element-wise greater than @c2@.
+clockGt :: Clock -> Clock -> Bool
+clockGt (Clock clk1) (Clock clk2) =
+    let (x:xs) `gtElems` (y:ys) = x > y && xs `gtElems` ys
+        [] `gtElems` [] = True
+        _ `gtElems` _ = False
+    in (Map.keys clk1 == Map.keys clk2) &&
+        (Map.elems clk1 `gtElems` Map.elems clk2)

@@ -47,10 +47,9 @@ runSpout zkOpts pName partition topology inputSource uFormula = do
 
         watchMasterState zk $ \et -> case et of
             Left e -> throw $ HSErrorWrap UnexpectedZookeeperError (show e)
-
             Right (SpoutsRewind (Clock pMap)) -> do
                 oldTid <- readIORef spoutRunnerIdRef
-                infoM $ "Rewind detected, killing thread=" ++ show oldTid
+                infoM $ "Rewind detected, killing " ++ show oldTid
                 killThread oldTid
                 waitForThreadDead oldTid
                 let newOffset = pMap Map.! partition

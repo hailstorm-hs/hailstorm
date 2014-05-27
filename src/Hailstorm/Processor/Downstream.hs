@@ -95,21 +95,19 @@ boltPipe bId@(bName, _) zk uformula mStateMVar preSnapState postSnapState = do
         newLWM = buildLWM lwmMap
         newLWMMap = Map.union (Map.singleton bName newLWM) lwmMap
 
-    let passOn stateA stateB nextSnapshotClock = do
+    let passOn stateA stateB desiredSnapClock = do
             let valA = Map.findWithDefault mempty key stateA
                 valB = Map.findWithDefault mempty key stateB
-                canSnapshot (Just clk) = newLWM `isNewerClock` clk
-                canSnapshot Nothing = False
 
             yield Payload { payloadTuple = (key, valA `mappend` valB)
                           , payloadPosition = (partition, offset)
                           , payloadLowWaterMarkMap = newLWMMap
                           }
 
-            if canSnapshot nextSnapshotClock
+            if canSnapshot desiredSnapClock newLWM
                 then do
                     void <$> lift $ saveState bId zk stateA $
-                        fromJust nextSnapshotClock
+                        fromJust desiredSnapClock
                     boltPipe bId zk uformula mStateMVar
                         (stateA `mergeStates` stateB) Map.empty
                 else boltPipe bId zk uformula mStateMVar stateA stateB
@@ -128,20 +126,14 @@ boltPipe bId@(bName, _) zk uformula mStateMVar preSnapState postSnapState = do
             let mergedState = preSnapState `mergeStates` postSnapState
             in passOn (mergeWithTuple mergedState (key, val)) Map.empty Nothing
   where
-    getNextSnapshotClock (Flowing (Just clk)) = Just clk
-    getNextSnapshotClock _ = Nothing
     mergeWithTuple st (key, val) = Map.unionWith mappend st $
         Map.singleton key val
     mergeLWM = Map.unionWith min
     mergeStates = Map.unionWith mappend
     buildLWM lwmMap = Clock $ foldr (mergeLWM . extractClockMap) Map.empty $
         Map.elems lwmMap
-    isNewerClock (Clock clk1) (Clock clk2) =
-        let (x:xs) `gtElems` (y:ys) = x > y && xs `gtElems` ys
-            [] `gtElems` [] = True
-            _ `gtElems` _ = False
-        in (Map.keys clk1 == Map.keys clk2) &&
-            (Map.elems clk1 `gtElems` Map.elems clk2)
+    canSnapshot (Just clk) lwm = lwm `clockGt` clk
+    canSnapshot Nothing _ = False
 
 saveState :: (Show k, Show v)
           => ProcessorId

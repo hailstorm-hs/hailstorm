@@ -15,11 +15,17 @@ import Hailstorm.Processor
 import Data.Either
 import Data.List.Split
 import Data.Map (Map)
-import System.Log.Logger
 import Hailstorm.Clock
 import Hailstorm.ZKCluster
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
+import qualified System.Log.Logger as L
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.ZKCluster.ProcessorState"
+
+errorM :: String -> IO ()
+errorM = L.errorM "Hailstorm.ZKCluster.ProcessorState"
 
 data ProcessorState = BoltRunning
                     | SinkRunning
@@ -55,7 +61,7 @@ initializeCluster :: ZKOptions -> IO ()
 initializeCluster opts = withConnection opts $ \zk -> do
     pnode <- ZK.create zk zkLivingProcessorsNode Nothing ZK.OpenAclUnsafe []
     case pnode of
-        Left e -> errorM "Hailstorm.ZKCluster" $
+        Left e -> errorM $
             "Could not create living processors node: " ++ show e
         Right _ -> return ()
 
@@ -70,10 +76,10 @@ registerProcessor opts pid initialState action =
         me <- ZK.create zk (zkProcessorNode pid)
             (Just $ serializeZK initialState) ZK.OpenAclUnsafe [ZK.Ephemeral]
         case me of
-            Left e  -> errorM "Hailstorm.ZKCluster" $
+            Left e  -> errorM $
                 "Error while registering " ++ show pid ++ ": " ++ show e
             Right _ -> do
-                infoM "Hailstorm.ZKCluster" $ "Registered: " ++ show pid
+                infoM $ "Registered: " ++ show pid
                 action zk
 
 -- | Delivers living processors change events to the callback. Uses the same

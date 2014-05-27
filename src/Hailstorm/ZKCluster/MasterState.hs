@@ -4,6 +4,7 @@ module Hailstorm.ZKCluster.MasterState
 , watchMasterState
 , setMasterState
 , createMasterState
+, getNextSnapshotClock
 ) where
 
 import Hailstorm.Clock
@@ -76,3 +77,9 @@ watchMasterState zk callback = do
                 when (lastState /= ms) (callback $ Right ms)
                 watchLoop mVar ms
             _ -> callback (Left ZK.NothingError) >> watchLoop mVar lastState
+
+-- | Returns the desired snapshot clock, if available; otherwise, returns
+-- Nothing.
+getNextSnapshotClock :: MasterState -> Maybe Clock
+getNextSnapshotClock (Flowing (Just clk)) = Just clk
+getNextSnapshotClock _ = Nothing

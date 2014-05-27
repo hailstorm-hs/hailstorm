@@ -12,5 +12,5 @@ initializeLogging :: IO ()
 initializeLogging = do
     hdlr <- streamHandler stderr INFO
     let fmtr = simpleLogFormatter "[$loggername $prio] $msg"
-    updateGlobalLogger "Hailstorm" $ setLevel INFO
-    updateGlobalLogger "Hailstorm" $ setHandlers [setFormatter hdlr fmtr]
+    updateGlobalLogger rootLoggerName $
+        setLevel INFO . setHandlers [setFormatter hdlr fmtr]

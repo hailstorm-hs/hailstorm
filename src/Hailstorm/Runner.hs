@@ -14,9 +14,14 @@ import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import System.Exit
 import System.IO
-
 import qualified Data.Map as Map
+import qualified System.Log.Logger as L
 
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.Runner"
+
+errorM :: String -> IO ()
+errorM = L.errorM "Hailstorm.Runner"
 
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 -- TODO: I'm making this hardcoded topology-specific pending
@@ -34,31 +39,32 @@ localRunner zkOpts topology formula filename ispout = do
     quietZK
     let source = FileSource [filename]
 
-    putStrLn "Running in local mode..."
+    infoM "Running in local mode"
 
     negotiatorId <- forkOS $ runNegotiator zkOpts topology source
-    putStrLn $ "Spawned negotiator" ++ show negotiatorId
+    infoM $ "Spawned negotiator " ++ show negotiatorId
     threadDelay 1000000
 
     let runDownstreamThread processorTuple = do
-            consumerId <- forkOS $ runDownstream zkOpts processorTuple
+            downstreamId <- forkOS $ runDownstream zkOpts processorTuple
                 topology formula
-            putStrLn $ "Spawned sink " ++ show consumerId
-            return consumerId
-    consumerIds <- mapM runDownstreamThread $ (Map.keys . addresses) topology
+            infoM $ "Spawned downstream " ++ show downstreamId
+            return downstreamId
+    downstreamIds <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
     spoutId <- forkOS $ runSpout zkOpts ispout filename topology source formula
 
     let baseThreads = [(negotiatorId, "Negotiator"), (spoutId, "Spout")]
-        consumerThreads = map (\tid -> (tid, show tid)) consumerIds
+        consumerThreads = map (\tid -> (tid, show tid)) downstreamIds
         threadToName = Map.fromList $ baseThreads ++ consumerThreads
 
     forever $ do
         mapM_ (\tid -> do
                 dead <- threadDead tid
                 when dead $ do
-                    hPutStrLn stderr $ fromJust (Map.lookup tid threadToName) ++ " thread terminated... shutting down"
+                    errorM $ fromJust (Map.lookup tid threadToName) ++
+                        " thread terminated: shutting down"
                     exitWith $ ExitFailure 1
               ) (Map.keys threadToName)
         threadDelay $ 1000 * 1000

@@ -17,6 +17,10 @@ import Hailstorm.Topology
 import qualified Data.Foldable as Foldable
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
+import qualified System.Log.Logger as L
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.Negotiator"
 
 runNegotiator :: (Topology t, InputSource s) => ZKOptions -> t -> s -> IO ()
 runNegotiator zkOpts topology inputSource = do
@@ -29,7 +33,7 @@ runNegotiator zkOpts topology inputSource = do
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where
     fullThread zk = do
-        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ Initialization
+        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk Initialization
         clock <- startClock inputSource -- TODO: get starting point by asking for the bolt's snapshot clock
         void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ SpoutsRewind clock
         _ <- untilSpoutsPaused zk topology
@@ -48,12 +52,12 @@ runNegotiator zkOpts topology inputSource = do
             Right children -> do
                 killFromRef fullThreadId
 
-                putStrLn $ "Processors changed: " ++ show children
+                infoM $ "Processors changed: " ++ show children
                 let expectedRegistrations = numProcessors topology + 1
 
                 if length children < expectedRegistrations
                     then do
-                        putStrLn "Not enough children"
+                        infoM "Waiting for enough children"
                         void <$> forceEitherIO UnexpectedZookeeperError $
                             debugSetMasterState zk Unavailable
                     else do
@@ -65,7 +69,7 @@ debugSetMasterState :: ZK.Zookeeper
                     -> IO (Either ZK.ZKError ZK.Stat)
 debugSetMasterState zk ms = do
     r <- setMasterState zk ms
-    putStrLn $ "Master state set to " ++ show ms
+    infoM $ "Master state set to " ++ show ms
     return r
 
 killFromRef :: IORef (Maybe ThreadId) -> IO ()
@@ -81,7 +85,7 @@ negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
         debugSetMasterState zk SpoutsPaused
     partitionsAndOffsets <- untilSpoutsPaused zk t
-    return $ Clock $ Map.fromList $ partitionsAndOffsets
+    return $ Clock $ Map.fromList partitionsAndOffsets
 
 
 untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]

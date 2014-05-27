@@ -8,7 +8,7 @@ module Hailstorm.Error
 
 import Control.Exception
 import Data.Typeable
-import System.IO
+import System.Log.Logger
 
 data HSError = UnknownWorkerException
              | UnexpectedZookeeperError
@@ -33,5 +33,5 @@ warnOnLeftIO :: (Show e) => IO (Either e a) -> IO ()
 warnOnLeftIO etAction = do
     et <- etAction
     case et of
-        Left e -> hPutStrLn stderr $ "Error: " ++ show e
+        Left e -> warningM "Hailstorm.Error" $ "Warning: " ++ show e
         _ -> return ()
