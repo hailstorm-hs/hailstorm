@@ -5,7 +5,7 @@ module Hailstorm.Sample.WordCountSample
 
 import Data.Monoid
 import Hailstorm.UserFormula
-import Hailstorm.Topology
+import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.Processor
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map as Map

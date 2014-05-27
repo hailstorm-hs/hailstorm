@@ -22,6 +22,7 @@ library
     Hailstorm.Concurrency
     Hailstorm.Error
     Hailstorm.InputSource
+    Hailstorm.InputSource.FileSource
     Hailstorm.Logging
     Hailstorm.Negotiator
     Hailstorm.Payload
@@ -32,6 +33,7 @@ library
     Hailstorm.Runner
     Hailstorm.Sample.WordCountSample
     Hailstorm.Topology
+    Hailstorm.Topology.HardcodedTopology
     Hailstorm.UserFormula
     Hailstorm.ZKCluster
     Hailstorm.ZKCluster.MasterState

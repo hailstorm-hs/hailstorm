@@ -5,11 +5,11 @@ import Control.Monad
 import Data.Maybe
 import Data.Monoid
 import Hailstorm.Concurrency
-import Hailstorm.InputSource
+import Hailstorm.InputSource.FileSource
 import Hailstorm.Negotiator
 import Hailstorm.Processor.Spout
 import Hailstorm.Processor.Downstream
-import Hailstorm.Topology
+import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import System.Exit
