@@ -103,12 +103,12 @@ boltPipe :: (Ord k, Monoid v, Show k, Show v, SnapshotStore s)
 boltPipe bId@(bName, _) zk mStateMVar state clk snapshotStore =
     pipeLoop state Map.empty False clk
   where
-    pipeLoop preSnapState postSnapState started loadedClock = do
+    pipeLoop preSnapState postSnapState started lastClock = do
         payload <- await
 
         -- If this is the first payload received, mark as Saved instead.
         unless started $
-            lift $ forceSetProcessorState zk bId $ BoltSaved loadedClock
+            lift $ forceSetProcessorState zk bId $ BoltSaved lastClock
 
         let (key, val) = payloadTuple payload
             (partition, offset) = payloadPosition payload
@@ -125,13 +125,13 @@ boltPipe bId@(bName, _) zk mStateMVar state clk snapshotStore =
                             , payloadLowWaterMarkMap = newLWMMap
                             }
 
-                if canSnapshot desiredSnapClock newLWM
+                if canSnapshot desiredSnapClock newLWM lastClock
                     then do
                         void <$> lift $ saveState bId zk stateA
                             (fromJust desiredSnapClock) snapshotStore
                         pipeLoop (stateA `mergeStates` stateB) Map.empty
-                            True loadedClock
-                    else pipeLoop stateA stateB True loadedClock
+                            True $ fromJust desiredSnapClock
+                    else pipeLoop stateA stateB True lastClock
 
         -- Determine next snapshot clock, if available.
         mState <- lift $ readMVar mStateMVar
@@ -157,8 +157,9 @@ boltPipe bId@(bName, _) zk mStateMVar state clk snapshotStore =
     buildLWM lwmMap = Clock $ foldr (mergeLWM . extractClockMap) Map.empty $
         Map.elems lwmMap
 
-    canSnapshot (Just c) lwm = lwm `clockGt` c
-    canSnapshot Nothing _ = False
+    canSnapshot (Just desiredSnap) lwm lastSnap = desiredSnap /= lastSnap &&
+        lwm `clockGt` desiredSnap
+    canSnapshot Nothing _ _ = False
 
 saveState :: (Show k, Show v, SnapshotStore s)
           => ProcessorId
