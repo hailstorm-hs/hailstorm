@@ -42,21 +42,30 @@ runDownstream :: (Ord k, Monoid v, Topology t, Show k, Show v, SnapshotStore s)
               -> s
               -> IO ()
 runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
+
+    (stateMap', savedClk) <- restoreSnapshot snapshotStore dId $
+        deserializeState uformula
+
     let (_, port) = addressFor topology dId
         ctype = processorType $ fromJust $ Map.lookup dName $
             processors topology
         producer = socketProducer uformula
+        throwNoDownstreamError = throw $ InvalidTopologyError $
+            dName ++ " is not a downstream processor"
         consumer zk mStateMVar =
             case ctype of
                 Bolt ->
-                    boltPipe dId zk uformula mStateMVar snapshotStore >->
+                    let savedState | (Just stateMap) <- stateMap' = stateMap
+                                   | otherwise = Map.empty
+                    in boltPipe dId zk mStateMVar savedState savedClk
+                        snapshotStore >->
                         downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
-                _ -> throw $ InvalidTopologyError $
-                    dName ++ " is not a downstream processor"
+                _ -> throwNoDownstreamError
         startState = case ctype of
                          Sink -> SinkRunning
-                         _ -> UnspecifiedState
+                         Bolt -> BoltLoaded savedClk
+                         _ -> throwNoDownstreamError
         processSocket s zk mStateMVar = runEffect $
             producer s >-> consumer zk mStateMVar
 
@@ -86,17 +95,13 @@ socketProducer uformula s = do
 boltPipe :: (Ord k, Monoid v, Show k, Show v, SnapshotStore s)
          => ProcessorId
          -> ZK.Zookeeper
-         -> UserFormula k v
          -> MVar MasterState
+         -> BoltState k v
+         -> Clock
          -> s
          -> Pipe (Payload k v) (Payload k v) IO ()
-boltPipe bId@(bName, _) zk uFormula mStateMVar snapshotStore = do
-    (stateMap', clk) <- lift $ restoreSnapshot snapshotStore bId $
-        deserializeState uFormula
-    let savedState | (Just stateMap) <- stateMap' = stateMap
-                   | otherwise = Map.empty
-    lift $ forceSetProcessorState zk bId $ BoltLoaded clk
-    pipeLoop savedState Map.empty False clk
+boltPipe bId@(bName, _) zk mStateMVar state clk snapshotStore =
+    pipeLoop state Map.empty False clk
   where
     pipeLoop preSnapState postSnapState started loadedClock = do
         payload <- await
@@ -152,7 +157,7 @@ boltPipe bId@(bName, _) zk uFormula mStateMVar snapshotStore = do
     buildLWM lwmMap = Clock $ foldr (mergeLWM . extractClockMap) Map.empty $
         Map.elems lwmMap
 
-    canSnapshot (Just clk) lwm = lwm `clockGt` clk
+    canSnapshot (Just c) lwm = lwm `clockGt` c
     canSnapshot Nothing _ = False
 
 saveState :: (Show k, Show v, SnapshotStore s)
