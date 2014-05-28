@@ -39,30 +39,30 @@ runNegotiator zkOpts topology inputSource = do
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where
     fullChildrenThread zk masterThreadId = do
-        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk Initialization
+        void <$> forceEitherIO UnknownWorkerException $ setMasterState zk Initialization
         clocks <- untilBoltsLoaded zk topology
         unless (allTheSame clocks) (doubleThrow masterThreadId 
             (BadStartupError $ "Bolts started at different points " ++ show clocks))
 
         clock <- startClock inputSource -- TODO: use above clocks
-        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ SpoutsRewind clock
+        void <$> forceEitherIO UnknownWorkerException $ setMasterState zk $ SpoutsRewind clock
         _ <- untilSpoutsPaused zk topology
         flowLoop zk
 
     flowLoop zk = forever $ do
         infoM "Allowing grace period before next snapshot..."
-        void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ Flowing Nothing
+        void <$> forceEitherIO UnknownWorkerException $ setMasterState zk $ Flowing Nothing
         
         snapshotThrottle
 
         infoM "Negotiating next snapshot"
         nextSnapshotClock <- negotiateSnapshot zk topology
         void <$> forceEitherIO UnknownWorkerException $
-            debugSetMasterState zk $ Flowing (Just nextSnapshotClock)
+            setMasterState zk $ Flowing (Just nextSnapshotClock)
 
         infoM "Waiting for bolts to save"
         _ <- untilBoltsSaved zk topology
-        return ()
+        infoM "Bolts saved!"
 
     watchLoop zk fullChildrenThreadId = watchProcessors zk $ \childrenEither ->
         case childrenEither of
@@ -77,18 +77,10 @@ runNegotiator zkOpts topology inputSource = do
                     then do
                         infoM "Waiting for enough children"
                         void <$> forceEitherIO UnexpectedZookeeperError $
-                            debugSetMasterState zk Unavailable
+                            setMasterState zk Unavailable
                     else do
                         tid <- myThreadId >>= \mtid -> forkOS $ fullChildrenThread zk mtid
                         writeIORef fullChildrenThreadId $ Just tid
-
-debugSetMasterState :: ZK.Zookeeper
-                    -> MasterState
-                    -> IO (Either ZK.ZKError ZK.Stat)
-debugSetMasterState zk ms = do
-    r <- setMasterState zk ms
-    infoM $ "Master state set to " ++ show ms
-    return r
 
 killFromRef :: IORef (Maybe ThreadId) -> IO ()
 killFromRef ioRef = do
@@ -98,7 +90,7 @@ killFromRef ioRef = do
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
-        debugSetMasterState zk SpoutsPaused
+        setMasterState zk SpoutsPaused
     partitionsAndOffsets <- untilSpoutsPaused zk t
     return $ Clock $ Map.fromList partitionsAndOffsets
 

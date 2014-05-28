@@ -14,8 +14,12 @@ import Control.Exception
 import Control.Monad
 import Hailstorm.Error
 import Hailstorm.ZKCluster
-import System.Log.Logger
 import Database.Zookeeper as ZK
+
+import qualified System.Log.Logger as L
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.MasterState" 
 
 -- | Master state Zookeeper node.
 zkMasterStateNode :: String
@@ -39,14 +43,14 @@ injectMasterState zk action = do
     watchMasterState zk $ \et ->
         case et of
             Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
-            Right ms -> do
-                infoM "Hailstorm.MasterState" $ "State changed to " ++ show ms
-                tryTakeMVar stateMVar >> putMVar stateMVar ms
+            Right ms -> tryTakeMVar stateMVar >> putMVar stateMVar ms
 
 -- | Sets state of master node.
 setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
-setMasterState zk ms = ZK.set zk zkMasterStateNode
-    (Just $ serializeZK ms) Nothing
+setMasterState zk ms = do
+    r <- ZK.set zk zkMasterStateNode (Just $ serializeZK ms) Nothing
+    case r of Right _ -> infoM $ "Master state set to " ++ show ms; _ -> return ()
+    return r
 
 -- | Create an ephemeral master state node on Zookeeper.
 createMasterState :: ZK.Zookeeper
