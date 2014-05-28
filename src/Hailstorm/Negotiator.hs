@@ -59,9 +59,9 @@ runNegotiator zkOpts topology inputSource = do
         nextSnapshotClock <- negotiateSnapshot zk topology
         forceSetMasterState zk $ Flowing (Just nextSnapshotClock)
 
-        infoM "Waiting for bolts to save"
-        _ <- untilBoltsSaved zk topology
-        infoM "Bolts saved!"
+        infoM $ "Waiting for bolts to save to negotiated " ++ show nextSnapshotClock
+        clock <- untilBoltsSaved zk topology nextSnapshotClock
+        infoM $ "Bolts saved at " ++ show clock
 
     watchLoop zk fullChildrenThreadId = watchProcessors zk $ \childrenEither ->
         case childrenEither of
@@ -96,17 +96,14 @@ allTheSame [] = True
 allTheSame xs = all (== head xs) (tail xs)
 
 untilBoltsLoaded :: Topology t => ZK.Zookeeper -> t -> IO [Clock]
-untilBoltsLoaded zk t = do
-    _ <- untilStatesMatch "Waiting for bolts to load : " zk (boltIds t)
-        id -- | TODO: actually match bolt loaded once milind is done
-    return []
+untilBoltsLoaded zk t = 
+    untilStatesMatch "Waiting for bolts to load : " zk (boltIds t)
+        (\pStates -> [clock | (BoltLoaded clock) <- pStates])
 
-untilBoltsSaved :: Topology t => ZK.Zookeeper -> t -> IO Clock
-untilBoltsSaved zk t = do
+untilBoltsSaved :: Topology t => ZK.Zookeeper -> t -> Clock -> IO Clock
+untilBoltsSaved zk t clock = do
     saveClocks <- untilStatesMatch "Waiting for bolts to save: " zk (boltIds t)
-        (\pStates -> [clock | (BoltSaved clock) <- pStates])
-    unless (allTheSame saveClocks)
-        (throw $ BadClusterStateError $ "Cluster bolts saved snapshots at different points " ++ show saveClocks)
+        (\pStates -> [clock | (BoltSaved c) <- pStates, clock == c ])
     return $ head saveClocks
 
 untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]
