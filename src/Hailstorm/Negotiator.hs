@@ -10,6 +10,7 @@ import Data.IORef
 import Hailstorm.Clock
 import Hailstorm.InputSource
 import Hailstorm.Error
+import Hailstorm.Processor
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.MasterState
 import Hailstorm.ZKCluster.ProcessorState
@@ -100,42 +101,32 @@ allTheSame xs = all (== head xs) (tail xs)
 
 untilBoltsLoaded :: Topology t => ZK.Zookeeper -> t -> IO [Clock]
 untilBoltsLoaded zk t = do
-    stateMap <- forceEitherIO UnknownWorkerException $
-        getAllProcessorStates zk
-    let boltStates = map (\k -> stateMap Map.! k ) (boltIds t)
-        boltsLoaded= [clock | (BoltLoaded clock) <- boltStates]
-
-    if length boltStates /= length boltsLoaded -- TODO: make equality once milind is done
-        then return boltsLoaded
-        else do
-            infoM $ "Waiting for bolts to load: " ++ show boltStates
-            zkThrottle >> untilBoltsLoaded zk t
+    _ <- untilStatesMatch "Waiting for bolts to load : " zk (boltIds t)
+        id -- | TODO: actually match bolt loaded once milind is done
+    return []
 
 untilBoltsSaved :: Topology t => ZK.Zookeeper -> t -> IO Clock
 untilBoltsSaved zk t = do
-    stateMap <- forceEitherIO UnknownWorkerException $
-        getAllProcessorStates zk
-    let boltStates = map (\k -> stateMap Map.! k ) (boltIds t)
-        boltsSaved = [clock | (BoltSaved clock) <- boltStates]
-
-    unless (allTheSame boltsSaved) 
-        (throw $ BadClusterStateError $ "Cluster bolts saved snapshots at different points " ++ show boltsSaved)
-    
-    if length boltStates == length boltsSaved
-        then return (head boltsSaved)
-        else do
-            infoM $ "Waiting for bolts to save: " ++ show boltStates
-            zkThrottle >> untilBoltsSaved zk t
+    saveClocks <- untilStatesMatch "Waiting for bolts to save: " zk (boltIds t)
+        (\pStates -> [clock | (BoltSaved clock) <- pStates])
+    unless (allTheSame saveClocks) 
+        (throw $ BadClusterStateError $ "Cluster bolts saved snapshots at different points " ++ show saveClocks)
+    return $ head saveClocks 
     
 untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]
-untilSpoutsPaused zk t = do
+untilSpoutsPaused zk t = 
+    untilStatesMatch "Waiting for spouts to pause: " zk (spoutIds t)
+        (\pStates -> [(p,o) | (SpoutPaused p o) <- pStates])
+
+untilStatesMatch :: String -> ZK.Zookeeper -> [ProcessorId] -> ([ProcessorState] -> [a]) -> IO [a]
+untilStatesMatch infoString zk pids matcher = do
     stateMap <- forceEitherIO UnknownWorkerException $
         getAllProcessorStates zk
-    let spoutStates = map (\k -> stateMap Map.! k ) (spoutIds t)
-        spoutsPaused = [(p,o) | (SpoutPaused p o) <- spoutStates]
+    let pStates = map (\k -> stateMap Map.! k ) pids
+        matched = matcher pStates
 
-    if length spoutsPaused == length spoutStates
-        then return spoutsPaused
-        else do
-            infoM $ "Waiting for spouts to pause: " ++ show spoutStates
-            zkThrottle >> untilSpoutsPaused zk t
+    if length pStates == length matched then return matched
+    else do
+        infoM $ infoString ++ show pStates
+        zkThrottle >> untilStatesMatch infoString zk pids matcher
+
