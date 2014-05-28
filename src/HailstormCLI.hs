@@ -6,6 +6,7 @@ import Hailstorm.Sample.WordCountSample
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.ProcessorState
 import Hailstorm.Logging
+import Hailstorm.SnapshotStore.DirSnapshotStore
 import System.FilePath
 import System.Environment
 import qualified Hailstorm.Runner as HSR
@@ -43,8 +44,9 @@ runSample mainOpts _ _ = do
     -- symlink hailstorm too)
     home <- getEnv "HOME"
     initializeLogging
+    let store = DirSnapshotStore $ home </> "store"
     HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
-        wordCountFormula  (home </> "test.txt") "words"
+        wordCountFormula  (home </> "test.txt") "words" store
 
 -- | Main entry point.
 main :: IO ()

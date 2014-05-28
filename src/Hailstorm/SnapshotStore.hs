@@ -17,4 +17,4 @@ class SnapshotStore s where
     restoreSnapshot :: s
                     -> ProcessorId
                     -> (String -> Map.Map k v)
-                    -> IO (Map.Map k v, Clock)
+                    -> IO (Maybe (Map.Map k v), Clock)

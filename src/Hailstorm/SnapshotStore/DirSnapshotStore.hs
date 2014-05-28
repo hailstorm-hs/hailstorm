@@ -8,6 +8,7 @@ import Hailstorm.SnapshotStore
 import Data.List.Split
 import System.Directory
 import System.FilePath
+import qualified Data.Map as Map
 
 data DirSnapshotStore = DirSnapshotStore FilePath
                         deriving (Eq, Show, Read)
@@ -20,11 +21,16 @@ instance SnapshotStore DirSnapshotStore where
             show bState ++ "\1" ++ show clk
 
     restoreSnapshot (DirSnapshotStore dir) pId stateDeserializer = do
-        contents <- readFile (dir </> genStoreFilename pId)
-        let [bStateS, clkS] = splitOn "\1" contents
-            clk = read clkS :: Clock
-            bState = stateDeserializer bStateS
-        return (bState, clk)
+        let fname = dir </> genStoreFilename pId
+        exists <- doesFileExist fname
+        if exists
+            then do
+                contents <- readFile (dir </> genStoreFilename pId)
+                let [bStateS, clkS] = splitOn "\1" contents
+                    clk = read clkS :: Clock
+                    bState = stateDeserializer bStateS
+                return (Just bState, clk)
+            else return (Nothing, Clock Map.empty)
 
 genStoreFilename :: ProcessorId -> FilePath
 genStoreFilename (pName, pInstance) = pName ++ "-" ++ show pInstance
