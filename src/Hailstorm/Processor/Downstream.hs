@@ -52,10 +52,12 @@ runDownstream opts dId@(dName, _) topology uformula = do
                 Sink -> sinkConsumer uformula
                 _ -> throw $ InvalidTopologyError $
                     dName ++ " is not a downstream processor"
+        startState = case ctype of Sink -> SinkRunning; _ -> UnspecifiedState
         processSocket s zk mStateMVar = runEffect $
             producer s >-> consumer zk mStateMVar
 
-    registerProcessor opts dId SinkRunning $ \zk ->
+
+    registerProcessor opts dId startState $ \zk ->
         serve HostAny port $ \(s, _) ->
             injectMasterState zk (processSocket s zk)
 

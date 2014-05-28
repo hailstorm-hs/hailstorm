@@ -1,17 +1,21 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 module Hailstorm.Error
 ( HSError (..)
+, doubleThrow
 , forceEitherIO
 , warnOnLeftIO
 , wrapInHSError
 ) where
 
+import Control.Concurrent
 import Control.Exception
 import Data.Typeable
 import System.Log.Logger
 
 data HSError = UnknownWorkerException
              | UnexpectedZookeeperError
+             | BadStartupError String
+             | BadClusterStateError String
              | InvalidTopologyError String
              | DuplicateNegotiatorError String
              | ZookeeperConnectionError String
@@ -35,3 +39,6 @@ warnOnLeftIO etAction = do
     case et of
         Left e -> warningM "Hailstorm.Error" $ "Warning: " ++ show e
         _ -> return ()
+
+doubleThrow :: (Exception e) => ThreadId -> e -> IO ()
+doubleThrow tid e = throwTo tid e >> throw e

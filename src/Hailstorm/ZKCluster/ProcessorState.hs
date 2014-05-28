@@ -32,6 +32,7 @@ data ProcessorState = BoltRunning
                     | SpoutPaused Partition Offset
                     | SpoutRunning
                     | BoltSaved Clock
+                    | BoltLoaded Clock
                     | UnspecifiedState
                       deriving (Eq, Show, Read)
 

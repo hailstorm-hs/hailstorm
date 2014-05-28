@@ -22,6 +22,12 @@ import qualified System.Log.Logger as L
 infoM :: String -> IO ()
 infoM = L.infoM "Hailstorm.Negotiator"
 
+snapshotInterval :: Int
+snapshotInterval = 10 * 1000 * 1000
+
+snapshotThrottle :: IO ()
+snapshotThrottle = threadDelay snapshotInterval
+
 runNegotiator :: (Topology t, InputSource s) => ZKOptions -> t -> s -> IO ()
 runNegotiator zkOpts topology inputSource = do
     fullChildrenThreadId <- newIORef (Nothing :: Maybe ThreadId)
@@ -32,25 +38,37 @@ runNegotiator zkOpts topology inputSource = do
                 watchLoop zk fullChildrenThreadId
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where
-    fullThread zk = do
+    fullChildrenThread zk masterThreadId = do
         void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk Initialization
-        clock <- startClock inputSource -- TODO: get starting point by asking for the bolt's snapshot clock
+        clocks <- untilBoltsLoaded zk topology
+        unless (allTheSame clocks) (doubleThrow masterThreadId 
+            (BadStartupError $ "Bolts started at different points " ++ show clocks))
+
+        clock <- startClock inputSource -- TODO: use above clocks
         void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ SpoutsRewind clock
         _ <- untilSpoutsPaused zk topology
+        flowLoop zk
+
+    flowLoop zk = forever $ do
+        infoM "Allowing grace period before next snapshot..."
         void <$> forceEitherIO UnknownWorkerException $ debugSetMasterState zk $ Flowing Nothing
+        
+        snapshotThrottle
 
-        forever $ do
-            waitUntilSnapshotsComplete zk topology
-            threadDelay $ 1000 * 1000 * 5
-            nextSnapshotClock <- negotiateSnapshot zk topology
-            void <$> forceEitherIO UnknownWorkerException $
-                debugSetMasterState zk $ Flowing (Just nextSnapshotClock)
+        infoM "Negotiating next snapshot"
+        nextSnapshotClock <- negotiateSnapshot zk topology
+        void <$> forceEitherIO UnknownWorkerException $
+            debugSetMasterState zk $ Flowing (Just nextSnapshotClock)
 
-    watchLoop zk fullThreadId = watchProcessors zk $ \childrenEither ->
+        infoM "Waiting for bolts to save"
+        _ <- untilBoltsSaved zk topology
+        return ()
+
+    watchLoop zk fullChildrenThreadId = watchProcessors zk $ \childrenEither ->
         case childrenEither of
             Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
             Right children -> do
-                killFromRef fullThreadId
+                killFromRef fullChildrenThreadId
 
                 infoM $ "Processors changed: " ++ show children
                 let expectedRegistrations = numProcessors topology + 1
@@ -61,8 +79,8 @@ runNegotiator zkOpts topology inputSource = do
                         void <$> forceEitherIO UnexpectedZookeeperError $
                             debugSetMasterState zk Unavailable
                     else do
-                        tid <- forkOS $ fullThread zk
-                        writeIORef fullThreadId $ Just tid
+                        tid <- myThreadId >>= \mtid -> forkOS $ fullChildrenThread zk mtid
+                        writeIORef fullChildrenThreadId $ Just tid
 
 debugSetMasterState :: ZK.Zookeeper
                     -> MasterState
@@ -77,9 +95,6 @@ killFromRef ioRef = do
     mt <- readIORef ioRef
     Foldable.forM_ mt killThread
 
-waitUntilSnapshotsComplete :: Topology t => ZK.Zookeeper -> t -> IO ()
-waitUntilSnapshotsComplete _ _ = return ()
-
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
     void <$> forceEitherIO UnknownWorkerException $
@@ -87,7 +102,39 @@ negotiateSnapshot zk t = do
     partitionsAndOffsets <- untilSpoutsPaused zk t
     return $ Clock $ Map.fromList partitionsAndOffsets
 
+allTheSame :: (Eq a) => [a] -> Bool
+allTheSame [] = True
+allTheSame xs = all (== head xs) (tail xs)
 
+untilBoltsLoaded :: Topology t => ZK.Zookeeper -> t -> IO [Clock]
+untilBoltsLoaded zk t = do
+    stateMap <- forceEitherIO UnknownWorkerException $
+        getAllProcessorStates zk
+    let boltStates = map (\k -> stateMap Map.! k ) (boltIds t)
+        boltsLoaded= [clock | (BoltLoaded clock) <- boltStates]
+
+    if length boltStates /= length boltsLoaded -- TODO: make equality once milind is done
+        then return boltsLoaded
+        else do
+            infoM $ "Waiting for bolts to load: " ++ show boltStates
+            zkThrottle >> untilBoltsLoaded zk t
+
+untilBoltsSaved :: Topology t => ZK.Zookeeper -> t -> IO Clock
+untilBoltsSaved zk t = do
+    stateMap <- forceEitherIO UnknownWorkerException $
+        getAllProcessorStates zk
+    let boltStates = map (\k -> stateMap Map.! k ) (boltIds t)
+        boltsSaved = [clock | (BoltSaved clock) <- boltStates]
+
+    unless (allTheSame boltsSaved) 
+        (throw $ BadClusterStateError $ "Cluster bolts saved snapshots at different points " ++ show boltsSaved)
+    
+    if length boltStates == length boltsSaved
+        then return (head boltsSaved)
+        else do
+            infoM $ "Waiting for bolts to save: " ++ show boltStates
+            zkThrottle >> untilBoltsSaved zk t
+    
 untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]
 untilSpoutsPaused zk t = do
     stateMap <- forceEitherIO UnknownWorkerException $
@@ -97,4 +144,6 @@ untilSpoutsPaused zk t = do
 
     if length spoutsPaused == length spoutStates
         then return spoutsPaused
-        else untilSpoutsPaused zk t
+        else do
+            infoM $ "Waiting for spouts to pause: " ++ show spoutStates
+            zkThrottle >> untilSpoutsPaused zk t

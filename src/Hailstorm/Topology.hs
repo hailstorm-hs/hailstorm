@@ -1,7 +1,9 @@
 module Hailstorm.Topology
 ( Topology(..)
 , ProcessorAddress
+, boltIds
 , spoutIds
+, processorIdsByType
 ) where
 
 import Hailstorm.Payload
@@ -33,7 +35,15 @@ class Topology t where
                            -> ProcessorName
                            -> [ProcessorName]
 
+
+processorIdsByType :: (Topology t) => t -> ProcessorType -> [ProcessorId]
+processorIdsByType t desiredType  = 
+             [(n,c)
+             | (_, Processor pt n p _) <- Map.toList (processors t)
+             , c <- [0..(p - 1)], pt == desiredType]
+
 spoutIds :: (Topology t) => t -> [ProcessorId]
-spoutIds t = [(n,c)
-             | (_, Processor Spout n p _) <- Map.toList (processors t)
-             , c <- [0..(p - 1)]]
+spoutIds t = processorIdsByType t Spout
+
+boltIds :: (Topology t) => t -> [ProcessorId]
+boltIds t = processorIdsByType t Bolt

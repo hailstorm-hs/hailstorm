@@ -4,7 +4,10 @@ module Hailstorm.ZKCluster
 , serializeZK
 , deserializeZK
 , quietZK
+, zkThrottle
 ) where
+
+import Control.Concurrent
 
 import qualified Data.ByteString.Char8 as C8
 import qualified Database.Zookeeper as ZK
@@ -15,6 +18,14 @@ data ZKOptions = ZKOptions { connectionString :: String }
 -- | Timeout for Zookeeper connections.
 zkTimeout :: ZK.Timeout
 zkTimeout = 10000
+
+-- | Friendly amount of time to wait while pinging ZK
+zkPingInterval :: Int
+zkPingInterval = 1000 * 1000
+
+-- | Friendly throttling delay between ZK pings
+zkThrottle :: IO ()
+zkThrottle = threadDelay zkPingInterval
 
 -- | Reduces output level of Zookeeper to warnings-only.
 quietZK :: IO ()
