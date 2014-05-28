@@ -2,7 +2,6 @@ module Hailstorm.Negotiator
 ( runNegotiator
 ) where
 
-import Control.Applicative
 import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
@@ -40,26 +39,25 @@ runNegotiator zkOpts topology inputSource = do
     throw $ ZookeeperConnectionError "Unable to register Negotiator"
   where
     fullChildrenThread zk masterThreadId = do
-        void <$> forceEitherIO UnknownWorkerException $ setMasterState zk Initialization
+        forceSetMasterState zk Initialization
         clocks <- untilBoltsLoaded zk topology
-        unless (allTheSame clocks) (doubleThrow masterThreadId 
+        unless (allTheSame clocks) (doubleThrow masterThreadId
             (BadStartupError $ "Bolts started at different points " ++ show clocks))
 
         clock <- startClock inputSource -- TODO: use above clocks
-        void <$> forceEitherIO UnknownWorkerException $ setMasterState zk $ SpoutsRewind clock
+        forceSetMasterState zk $ SpoutsRewind clock
         _ <- untilSpoutsPaused zk topology
         flowLoop zk
 
     flowLoop zk = forever $ do
         infoM "Allowing grace period before next snapshot..."
-        void <$> forceEitherIO UnknownWorkerException $ setMasterState zk $ Flowing Nothing
-        
+        forceSetMasterState zk $ Flowing Nothing
+
         snapshotThrottle
 
         infoM "Negotiating next snapshot"
         nextSnapshotClock <- negotiateSnapshot zk topology
-        void <$> forceEitherIO UnknownWorkerException $
-            setMasterState zk $ Flowing (Just nextSnapshotClock)
+        forceSetMasterState zk $ Flowing (Just nextSnapshotClock)
 
         infoM "Waiting for bolts to save"
         _ <- untilBoltsSaved zk topology
@@ -77,8 +75,7 @@ runNegotiator zkOpts topology inputSource = do
                 if length children < expectedRegistrations
                     then do
                         infoM "Waiting for enough children"
-                        void <$> forceEitherIO UnexpectedZookeeperError $
-                            setMasterState zk Unavailable
+                        forceSetMasterState zk Unavailable
                     else do
                         tid <- myThreadId >>= \mtid -> forkOS $ fullChildrenThread zk mtid
                         writeIORef fullChildrenThreadId $ Just tid
@@ -90,8 +87,7 @@ killFromRef ioRef = do
 
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do
-    void <$> forceEitherIO UnknownWorkerException $
-        setMasterState zk SpoutsPaused
+    forceSetMasterState zk SpoutsPaused
     partitionsAndOffsets <- untilSpoutsPaused zk t
     return $ Clock $ Map.fromList partitionsAndOffsets
 
@@ -109,19 +105,18 @@ untilBoltsSaved :: Topology t => ZK.Zookeeper -> t -> IO Clock
 untilBoltsSaved zk t = do
     saveClocks <- untilStatesMatch "Waiting for bolts to save: " zk (boltIds t)
         (\pStates -> [clock | (BoltSaved clock) <- pStates])
-    unless (allTheSame saveClocks) 
+    unless (allTheSame saveClocks)
         (throw $ BadClusterStateError $ "Cluster bolts saved snapshots at different points " ++ show saveClocks)
-    return $ head saveClocks 
-    
+    return $ head saveClocks
+
 untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]
-untilSpoutsPaused zk t = 
+untilSpoutsPaused zk t =
     untilStatesMatch "Waiting for spouts to pause: " zk (spoutIds t)
         (\pStates -> [(p,o) | (SpoutPaused p o) <- pStates])
 
 untilStatesMatch :: String -> ZK.Zookeeper -> [ProcessorId] -> ([ProcessorState] -> [a]) -> IO [a]
 untilStatesMatch infoString zk pids matcher = do
-    stateMap <- forceEitherIO UnknownWorkerException $
-        getAllProcessorStates zk
+    stateMap <- forceEitherIO UnknownWorkerException $ getAllProcessorStates zk
     let pStates = map (\k -> stateMap Map.! k ) pids
         matched = matcher pStates
 

@@ -2,7 +2,7 @@ module Hailstorm.ZKCluster.MasterState
 ( MasterState(..)
 , injectMasterState
 , watchMasterState
-, setMasterState
+, forceSetMasterState
 , createMasterState
 , getNextSnapshotClock
 ) where
@@ -19,7 +19,7 @@ import Database.Zookeeper as ZK
 import qualified System.Log.Logger as L
 
 infoM :: String -> IO ()
-infoM = L.infoM "Hailstorm.MasterState" 
+infoM = L.infoM "Hailstorm.MasterState"
 
 -- | Master state Zookeeper node.
 zkMasterStateNode :: String
@@ -45,11 +45,20 @@ injectMasterState zk action = do
             Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
             Right ms -> tryTakeMVar stateMVar >> putMVar stateMVar ms
 
+-- | Set master state, but force IO Exception on failure.
+forceSetMasterState :: ZK.Zookeeper
+                    -> MasterState
+                    -> IO ()
+forceSetMasterState zk mState = void <$>
+    forceEitherIO UnknownWorkerException $ setMasterState zk mState
+
 -- | Sets state of master node.
 setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
 setMasterState zk ms = do
     r <- ZK.set zk zkMasterStateNode (Just $ serializeZK ms) Nothing
-    case r of Right _ -> infoM $ "Master state set to " ++ show ms; _ -> return ()
+    case r of
+        Right _ -> infoM $ "Master state set to " ++ show ms
+        _ -> return ()
     return r
 
 -- | Create an ephemeral master state node on Zookeeper.
