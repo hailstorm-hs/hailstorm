@@ -45,15 +45,16 @@ runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
         consumer zk mStateMVar =
             case ctype of
                 Bolt ->
-                    boltPipe dId zk mStateMVar snapshotStore >->
+                    boltPipe dId zk uformula mStateMVar snapshotStore >->
                         downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
                 _ -> throw $ InvalidTopologyError $
                     dName ++ " is not a downstream processor"
-        startState = case ctype of Sink -> SinkRunning; _ -> UnspecifiedState
+        startState = case ctype of
+                         Sink -> SinkRunning
+                         _ -> UnspecifiedState
         processSocket s zk mStateMVar = runEffect $
             producer s >-> consumer zk mStateMVar
-
 
     registerProcessor opts dId startState $ \zk ->
         serve HostAny port $ \(s, _) ->
@@ -81,14 +82,24 @@ socketProducer uformula s = do
 boltPipe :: (Ord k, Monoid v, Show k, Show v, SnapshotStore s)
          => ProcessorId
          -> ZK.Zookeeper
+         -> UserFormula k v
          -> MVar MasterState
          -> s
          -> Pipe (Payload k v) (Payload k v) IO ()
-boltPipe bId@(bName, _) zk mStateMVar snapshotStore =
-     pipeLoop Map.empty Map.empty
+boltPipe bId@(bName, _) zk uFormula mStateMVar snapshotStore = do
+    (stateMap', clk) <- lift $ restoreSnapshot snapshotStore bId $
+        deserializeState uFormula
+    let savedState | (Just stateMap) <- stateMap' = stateMap
+                   | otherwise = Map.empty
+    lift $ forceSetProcessorState zk bId $ BoltLoaded clk
+    pipeLoop savedState Map.empty False clk
   where
-    pipeLoop preSnapState postSnapState = do
+    pipeLoop preSnapState postSnapState started loadedClock = do
         payload <- await
+
+        -- If this is the first payload received, mark as Saved instead.
+        unless started $
+            lift $ forceSetProcessorState zk bId $ BoltSaved loadedClock
 
         let (key, val) = payloadTuple payload
             (partition, offset) = payloadPosition payload
@@ -110,7 +121,8 @@ boltPipe bId@(bName, _) zk mStateMVar snapshotStore =
                         void <$> lift $ saveState bId zk stateA
                             (fromJust desiredSnapClock) snapshotStore
                         pipeLoop (stateA `mergeStates` stateB) Map.empty
-                    else pipeLoop stateA stateB
+                            True loadedClock
+                    else pipeLoop stateA stateB True loadedClock
 
         -- Determine next snapshot clock, if available.
         mState <- lift $ readMVar mStateMVar
@@ -148,8 +160,7 @@ saveState :: (Show k, Show v, SnapshotStore s)
           -> IO ThreadId
 saveState pId zk bState clk snapshotStore = forkOS $ do
     saveSnapshot snapshotStore pId bState clk
-    void <$> forceEitherIO UnknownWorkerException $
-        setProcessorState zk pId (BoltSaved clk)
+    forceSetProcessorState zk pId (BoltSaved clk)
 
 -- | Builds a Consumer that receives a payload emitted from a handle and
 -- performs the sink operation defined in the given user formula.

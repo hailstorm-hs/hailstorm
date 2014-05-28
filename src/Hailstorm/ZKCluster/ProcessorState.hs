@@ -3,14 +3,15 @@ module Hailstorm.ZKCluster.ProcessorState
 , getDebugInfo
 , initializeCluster
 , registerProcessor
-, setProcessorState
-, getProcessorState
+, forceSetProcessorState
 , getAllProcessorStates
 , watchProcessors
 ) where
 
+import Control.Applicative
 import Control.Concurrent
 import Control.Monad
+import Hailstorm.Error
 import Hailstorm.Processor
 import Data.Either
 import Data.List.Split
@@ -103,6 +104,14 @@ watchProcessors zk callback = do
             Right children -> do
                 when (children /= lastChildren) (callback $ Right children)
                 childLoop childrenVar children
+
+-- | Set processor state, but force IO Exception on failure.
+forceSetProcessorState :: ZK.Zookeeper
+                       -> ProcessorId
+                       -> ProcessorState
+                       -> IO ()
+forceSetProcessorState zk pId pState = void <$>
+    forceEitherIO UnknownWorkerException $ setProcessorState zk pId pState
 
 -- | Sets state of processor in Zookeeper.
 setProcessorState :: ZK.Zookeeper

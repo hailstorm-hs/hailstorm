@@ -2,10 +2,8 @@ module Hailstorm.Processor.Spout
 ( runSpout
 ) where
 
-import Control.Applicative
 import Control.Concurrent hiding (yield)
 import Control.Exception
-import Control.Monad
 import Data.ByteString.Char8 ()
 import Data.IORef
 import Hailstorm.Clock
@@ -80,11 +78,10 @@ spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar = do
     case ms of
         Flowing _ -> passOn
         _ ->  do
-            void <$> lift $ forceEitherIO UnknownWorkerException
-                (setProcessorState zk spoutId $ SpoutPaused partition lastOffset)
+            lift $ forceSetProcessorState zk spoutId $
+                SpoutPaused partition lastOffset
             lift $ pauseUntilFlowing stateMVar
-            void <$> lift $ forceEitherIO UnknownWorkerException
-                (setProcessorState zk spoutId SpoutRunning)
+            lift $ forceSetProcessorState zk spoutId SpoutRunning
             loop
 
   where
