@@ -27,10 +27,6 @@ import Pipes
 import System.IO
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
-import qualified System.Log.Logger as L
-
-infoM :: String -> IO ()
-infoM = L.infoM "Hailstorm.Processor.Downstream"
 
 type BoltState k v = Map.Map k v
 
@@ -169,7 +165,6 @@ saveState :: (Show k, Show v, SnapshotStore s)
           -> s
           -> IO ThreadId
 saveState pId zk bState clk snapshotStore = forkOS $ do
-    infoM $ "Saving snapshot for " ++ show pId
     saveSnapshot snapshotStore pId bState clk
     forceSetProcessorState zk pId (BoltSaved clk)
 

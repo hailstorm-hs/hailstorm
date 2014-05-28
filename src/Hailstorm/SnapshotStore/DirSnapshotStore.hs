@@ -22,22 +22,24 @@ instance SnapshotStore DirSnapshotStore where
 
     saveSnapshot (DirSnapshotStore dir) pId bState clk = do
         createDirectoryIfMissing True dir
-        infoM $ "Saving bolt snapshot" ++ show pId
+        infoM $ "Saving bolt " ++ show pId
         writeFile (dir </> genStoreFilename pId) $
             show bState ++ "\1" ++ show clk
 
     restoreSnapshot (DirSnapshotStore dir) pId stateDeserializer = do
         let fname = dir </> genStoreFilename pId
-        infoM $ "Attempting to restore " ++ show pId ++ " from " ++ fname
         exists <- doesFileExist fname
         if exists
             then do
+                infoM $ "Restoring bolt " ++ show pId
                 contents <- readFile (dir </> genStoreFilename pId)
                 let [bStateS, clkS] = splitOn "\1" contents
                     clk = read clkS :: Clock
                     bState = stateDeserializer bStateS
                 return (Just bState, clk)
-            else return (Nothing, Clock Map.empty)
+            else do
+                infoM $ "No snapshot found for bolt " ++ show pId
+                return (Nothing, Clock Map.empty)
 
 genStoreFilename :: ProcessorId -> FilePath
 genStoreFilename (pName, pInstance) = pName ++ "-" ++ show pInstance
