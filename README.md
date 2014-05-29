@@ -34,13 +34,16 @@ Hailstorm requires Kafka to be installed and operating and the librdkafka librar
 installed. See https://github.com/cosbynator/haskakafka for details.
 
 After you have installed librdkafka will have to install the haskakafka bindings
-into your sandbox. These aren't yet available on Cabal, outside of your sandbox run:
+into your sandbox. These aren't yet available on Cabal, so install cabalg and c2hs 
+in your sandbox:
     
+    cabal install c2hs
     cabal install cabalg 
+    .cabal-sandbox/bin/cabalg https://github.com/cosbynator/haskakafka.git
 
-Inside the sandbox, run
+If you are getting `stdio.h' errors on OSX, try
 
-    cabalg https://github.com/cosbynator/haskakafka.git 
+    .cabal-sandbox/bin/cabalg https://github.com/cosbynator/haskakafka.git -- --with-gcc=gcc-4.8
 
 
 And you are done!
