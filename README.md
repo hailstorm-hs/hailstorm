@@ -30,11 +30,11 @@ While it is running, you can extract debug metadata by executing
      hailstorm zk_show
 
 ### Haskakafka
-Hailstorm requires Kafka to be installed and operating. For basic set-up instructions, 
-see https://github.com/cosbynator/haskakafka.
+Hailstorm requires Kafka to be installed and operating and the librdkafka library 
+installed. See https://github.com/cosbynator/haskakafka for details.
 
-After Kafka is installed and running, you will also have to install the haskakafka bindings
-for Haskell. These aren't yet available on Cabal, outside of your sandbox run:
+After you have installed librdkafka will have to install the haskakafka bindings
+into your sandbox. These aren't yet available on Cabal, outside of your sandbox run:
     
     cabal install cabalg 
 
