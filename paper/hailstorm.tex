@@ -1,0 +1,53 @@
+\documentclass[10pt,nocopyrightspace]{sigplanconf}
+
+% TODO: preprint      Remove this option only once the paper is in final form.
+% TODO: 10pt, 11pt or nothing (default: 9pt)
+
+\usepackage{amsmath}
+\usepackage[T1]{fontenc}
+
+% For draft paper only (TODO: remove)
+\usepackage{blindtext}
+
+\begin{document}
+
+\special{papersize=8.5in,11in}
+\setlength{\pdfpageheight}{\paperheight}
+\setlength{\pdfpagewidth}{\paperwidth}
+
+\titlebanner{banner above paper title}        % These are ignored unless
+\preprintfooter{short description of paper}   % 'preprint' option specified.
+
+% TODO: better title?
+\title{Implementing a stream operator with exactly-once
+semantics}
+\subtitle{CS240h Final Project}
+
+\authorinfo{Thomas Dimson \and Milind Ganjoo}
+           {Stanford University}
+           {tdimson@cs.stanford.edu \and mganjoo@cs.stanford.edu}
+
+\maketitle
+
+\begin{abstract}
+
+\blindtext%
+
+\end{abstract}
+
+% \keywords
+% keyword1, keyword2
+
+\section{Introduction}
+
+\blindmathpaper%
+
+\appendix
+\section{Appendix Title}
+
+This is the text of the appendix, if you need one.
+
+\bibliography{hailstorm}{}
+\bibliographystyle{abbrvnat}
+
+\end{document}
