@@ -57,6 +57,7 @@ library
    , transformers
    , either
    , monad-loops
+   , haskakafka
   default-language:    Haskell2010
   ghc-options: -Wall -threaded
 
@@ -79,6 +80,7 @@ executable hailstorm
    , options
    , unix
    , monad-loops
+   , haskakafka
   Other-Modules: Hailstorm.UserFormula
   default-language: Haskell2010
   ghc-options: -Wall -threaded
