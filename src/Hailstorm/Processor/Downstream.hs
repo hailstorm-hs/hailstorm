@@ -1,3 +1,5 @@
+{-# LANGUAGE ScopedTypeVariables #-}
+
 module Hailstorm.Processor.Downstream
 ( BoltState
 , runDownstream
@@ -38,7 +40,6 @@ runDownstream :: (Ord k, Monoid v, Topology t, Show k, Show v, SnapshotStore s)
               -> s
               -> IO ()
 runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
-
     (stateMap', savedClk) <- restoreSnapshot snapshotStore dId $
         deserializeState uformula
 
@@ -65,9 +66,10 @@ runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
         processSocket s zk mStateMVar = runEffect $
             producer s >-> consumer zk mStateMVar
 
-    registerProcessor opts dId startState $ \zk ->
-        serve HostAny port $ \(s, _) ->
-            injectMasterState zk (processSocket s zk)
+    groundhogDay (runDownstream opts dId topology uformula snapshotStore) $
+        registerProcessor opts dId startState $ \zk ->
+            serve HostAny port $ \(s, _) ->
+                injectMasterState zk (processSocket s zk)
 
     throw $ ZookeeperConnectionError $ "Unable to register downstream " ++ dName
 

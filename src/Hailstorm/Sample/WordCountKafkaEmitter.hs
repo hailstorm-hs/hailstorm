@@ -37,4 +37,5 @@ emitLinesForever fp kOpts partition emitSleepMs = do
                         Nothing -> return ()
                     pollEvents kafka emitSleepMs
                 ) (hIsEOF h)
+
             drainOutQueue kafka

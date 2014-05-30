@@ -19,6 +19,7 @@ data HSError = UnknownWorkerException
              | InvalidTopologyError String
              | DuplicateNegotiatorError String
              | ZookeeperConnectionError String
+             | RegistrationDeleted
              | HSErrorWrap HSError String
                deriving (Show, Typeable)
 instance Exception HSError

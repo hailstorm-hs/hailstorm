@@ -67,7 +67,7 @@ runNegotiator zkOpts topology inputSource = do
         case childrenEither of
             Left e -> throw $ wrapInHSError e UnexpectedZookeeperError
             Right children -> do
-                killFromRef fullChildrenThreadId
+                killFromRef zk fullChildrenThreadId children
 
                 infoM $ "Processors changed: " ++ show children
                 let expectedRegistrations = numProcessors topology + 1
@@ -79,11 +79,20 @@ runNegotiator zkOpts topology inputSource = do
                     else do
                         tid <- myThreadId >>= \mtid -> forkOS $ fullChildrenThread zk mtid
                         writeIORef fullChildrenThreadId $ Just tid
-
-killFromRef :: IORef (Maybe ThreadId) -> IO ()
-killFromRef ioRef = do
+    
+-- | Kill all other nodes on a single node death (if we had a full thread)
+killFromRef :: ZK.Zookeeper -> IORef (Maybe ThreadId) -> [String] -> IO ()
+killFromRef zk ioRef children = do
     mt <- readIORef ioRef
-    Foldable.forM_ mt killThread
+    case mt of 
+        Just tid -> do
+            killThread tid
+            mapM_ (\child ->
+                    unless (child == "negotiator-0") $ do
+                        _ <- ZK.delete zk (zkLivingProcessorsNode ++ "/" ++ child) Nothing 
+                        return ()
+                   ) children
+        Nothing -> return ()
 
 negotiateSnapshot :: (Topology t) => ZK.Zookeeper -> t -> IO Clock
 negotiateSnapshot zk t = do

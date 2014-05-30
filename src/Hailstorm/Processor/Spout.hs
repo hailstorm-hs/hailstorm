@@ -38,24 +38,26 @@ runSpout :: (Topology t, InputSource s)
 runSpout zkOpts pName partition topology inputSource uFormula = do
     index <- partitionIndex inputSource partition
     let spoutId = (pName, index)
-    registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
-        masterStateMVar <- newEmptyMVar
-        tid <- forkOS $ pipeThread zk spoutId masterStateMVar 0
-        spoutRunnerIdRef <- newIORef tid
+    
+    groundhogDay (runSpout zkOpts pName partition topology inputSource uFormula) $
+        registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
+            masterStateMVar <- newEmptyMVar
+            tid <- forkOS $ pipeThread zk spoutId masterStateMVar 0
+            spoutRunnerIdRef <- newIORef tid
 
-        watchMasterState zk $ \et -> case et of
-            Left e -> throw $ HSErrorWrap UnexpectedZookeeperError (show e)
-            Right (SpoutsRewind (Clock pMap)) -> do
-                oldTid <- readIORef spoutRunnerIdRef
-                infoM $ "Rewind detected, killing " ++ show oldTid
-                killThread oldTid
-                waitForThreadDead oldTid
-                let newOffset = pMap Map.! partition
-                newTid <- forkOS $ pipeThread zk spoutId masterStateMVar newOffset
-                infoM $ "Rewound thread to " ++ show (partition, newOffset)
-                writeIORef spoutRunnerIdRef newTid
+            watchMasterState zk $ \et -> case et of
+                Left e -> throw $ HSErrorWrap UnexpectedZookeeperError (show e)
+                Right (SpoutsRewind (Clock pMap)) -> do
+                    oldTid <- readIORef spoutRunnerIdRef
+                    infoM $ "Rewind detected, killing " ++ show oldTid
+                    killThread oldTid
+                    waitForThreadDead oldTid
+                    let newOffset = pMap Map.! partition
+                    newTid <- forkOS $ pipeThread zk spoutId masterStateMVar newOffset
+                    infoM $ "Rewound thread to " ++ show (partition, newOffset)
+                    writeIORef spoutRunnerIdRef newTid
 
-            Right ms -> signalState masterStateMVar ms
+                Right ms -> signalState masterStateMVar ms
 
     throw $ ZookeeperConnectionError $ "Unable to register spout " ++ pName
   where
