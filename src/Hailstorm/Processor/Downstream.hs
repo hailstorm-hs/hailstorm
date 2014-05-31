@@ -9,7 +9,9 @@ import Control.Concurrent hiding (yield)
 import Control.Applicative
 import Control.Exception
 import Control.Monad
+import Control.Monad.STM
 import Data.ByteString.Char8 ()
+import Data.IORef
 import Data.Maybe
 import Data.Monoid
 import Hailstorm.UserFormula
@@ -29,6 +31,8 @@ import Pipes
 import System.IO
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
+import qualified Pipes.Concurrent as PC
+import qualified Network.Socket as NS
 
 type BoltState k v = Map.Map k v
 
@@ -63,15 +67,46 @@ runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
                          Sink -> SinkRunning
                          Bolt -> BoltLoaded savedClk
                          _ -> throwNoDownstreamError
-        processSocket s zk mStateMVar = runEffect $
-            producer s >-> consumer zk mStateMVar
+        processSocket s pcOutput = runEffect $
+            producer s >-> PC.toOutput pcOutput
 
-    groundhogDay (runDownstream opts dId topology uformula snapshotStore) $
-        registerProcessor opts dId startState $ \zk ->
-            serve HostAny port $ \(s, _) ->
-                injectMasterState zk (processSocket s zk)
+    groundhogDay (runDownstream opts dId topology uformula snapshotStore) $ do
+        (pcOutput, pcInput, seal) <- PC.spawn' PC.Unbounded
+        serverRef <- newIORef (Nothing :: Maybe ThreadId)
+        
+        finally (registerProcessor opts dId startState $ \zk -> do
+                    serveId <- forkOS $ serveForkOS HostAny port $ \(s, _) -> processSocket s pcOutput
+                    writeIORef serverRef (Just serveId)
+
+                    injectMasterState zk $ \mStateMVar -> 
+                        runEffect $ PC.fromInput pcInput >-> consumer zk mStateMVar
+                ) (atomically seal >> killRef serverRef)
 
     throw $ ZookeeperConnectionError $ "Unable to register downstream " ++ dName
+
+
+killRef :: IORef (Maybe ThreadId) -> IO ()
+killRef iref = do
+    mtid <- readIORef iref
+    case mtid of 
+        Just tid -> killThread tid
+        Nothing -> return ()
+
+
+serveForkOS :: HostPreference
+            -> ServiceName
+            -> ((Socket, SockAddr) -> IO ()) -> IO r
+serveForkOS hp port k = do
+    listen hp port $ \(lsock,_) -> do
+      forever $ acceptForkOS lsock k
+
+acceptForkOS
+  :: NS.Socket 
+  -> ((NS.Socket, NS.SockAddr) -> IO ())
+  -> IO ThreadId
+acceptForkOS lsock f = do
+    client@(csock,_) <- NS.accept lsock
+    forkOS $ finally (f client) (NS.sClose csock)
 
 -- | Returns a Producer that receives a stream of payloads through a given
 -- socket and deserializes them.
