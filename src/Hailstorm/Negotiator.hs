@@ -14,7 +14,6 @@ import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.MasterState
 import Hailstorm.ZKCluster.ProcessorState
 import Hailstorm.Topology
-import qualified Data.Foldable as Foldable
 import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
 import qualified System.Log.Logger as L
@@ -79,17 +78,17 @@ runNegotiator zkOpts topology inputSource = do
                     else do
                         tid <- myThreadId >>= \mtid -> forkOS $ fullChildrenThread zk mtid
                         writeIORef fullChildrenThreadId $ Just tid
-    
+
 -- | Kill all other nodes on a single node death (if we had a full thread)
 killFromRef :: ZK.Zookeeper -> IORef (Maybe ThreadId) -> [String] -> IO ()
 killFromRef zk ioRef children = do
     mt <- readIORef ioRef
-    case mt of 
+    case mt of
         Just tid -> do
             killThread tid
             mapM_ (\child ->
                     unless (child == "negotiator-0") $ do
-                        _ <- ZK.delete zk (zkLivingProcessorsNode ++ "/" ++ child) Nothing 
+                        _ <- ZK.delete zk (zkLivingProcessorsNode ++ "/" ++ child) Nothing
                         return ()
                    ) children
         Nothing -> return ()
@@ -105,7 +104,7 @@ allTheSame [] = True
 allTheSame xs = all (== head xs) (tail xs)
 
 untilBoltsLoaded :: Topology t => ZK.Zookeeper -> t -> IO [Clock]
-untilBoltsLoaded zk t = 
+untilBoltsLoaded zk t =
     untilStatesMatch "Waiting for bolts to load : " zk (boltIds t)
         (\pStates -> [clock | (BoltLoaded clock) <- pStates])
 

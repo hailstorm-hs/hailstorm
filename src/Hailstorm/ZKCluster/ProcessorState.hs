@@ -94,24 +94,23 @@ processorRestartDelay = 15 * 1000 * 1000
 
 -- | Catches registration deleted events, restarts process
 groundhogDay :: IO () -> IO () -> IO ()
-groundhogDay handler action = 
+groundhogDay handler action =
     catch action (\(_ :: SomeException) -> threadDelay processorRestartDelay >> handler)
 
 -- | Creates a watcher that throws to the master thread whenever
 -- the registration is deleted from Zookeeper by the negotiator
-addDeletionWatcher :: ZK.Zookeeper -> ProcessorId -> IO () 
+addDeletionWatcher :: ZK.Zookeeper -> ProcessorId -> IO ()
 addDeletionWatcher zk pid = do
     masterTid <- myThreadId
-    _ <- forkOS $ do
-            me <- ZK.get zk (zkProcessorNode pid) (Just $ watcher masterTid)
-            case me of 
-                Left e -> doubleThrow masterTid (ZookeeperConnectionError $ show e)
-                Right x -> return ()
-    return ()
-    where
-      watcher masterTid _ ZK.DeletedEvent _ _ = do
+    void <$> forkOS $ do
+        me <- ZK.get zk (zkProcessorNode pid) (Just $ watcher masterTid)
+        case me of
+            Left e -> doubleThrow masterTid (ZookeeperConnectionError $ show e)
+            Right _ -> return ()
+  where
+    watcher masterTid _ ZK.DeletedEvent _ _ =
         throwTo masterTid RegistrationDeleted
-      watcher masterTid _ _ _ _ = return ()
+    watcher _ _ _ _ _ = return ()
 
 
 -- | Delivers living processors change events to the callback. Uses the same
