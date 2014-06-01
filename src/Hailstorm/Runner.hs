@@ -1,15 +1,17 @@
-module Hailstorm.Runner (localRunner) where
+module Hailstorm.Runner (runProcessors, localRunner) where
 
 import Control.Concurrent
 import Control.Monad
 import Data.Maybe
 import Data.Monoid
 import Hailstorm.Concurrency
+import Hailstorm.InputSource
 import Hailstorm.InputSource.FileSource
+import Hailstorm.Logging
 import Hailstorm.Negotiator
 import Hailstorm.Processor
-import Hailstorm.Processor.Spout
 import Hailstorm.Processor.Downstream
+import Hailstorm.Processor.Spout
 import Hailstorm.SnapshotStore
 import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.UserFormula
@@ -24,6 +26,52 @@ infoM = L.infoM "Hailstorm.Runner"
 
 errorM :: String -> IO ()
 errorM = L.errorM "Hailstorm.Runner"
+
+-- Runs a list of processors on this host
+runProcessors :: (Show k, Show v, Read k, Read v, 
+                  Ord k, Monoid v, SnapshotStore s, InputSource i)
+              => ZKOptions
+              -> HardcodedTopology
+              -> UserFormula k v
+              -> i
+              -> s
+              -> [ProcessorId]
+              -> IO ()
+
+runProcessors zkOpts topology uFormula inputSource snapshotStore pids = do
+    hSetBuffering stdout LineBuffering
+    hSetBuffering stderr LineBuffering
+    initializeLogging
+    quietZK
+
+    tids <- forM pids startProcessor
+    forever $ do
+        forM_ tids $ \tid -> do
+            dead <- threadDead tid
+            when dead $ do
+                errorM $ "Processor thread terminated: shutting down"
+                exitWith $ ExitFailure 1
+        threadDelay $ 1000 * 1000
+
+    where
+        startProcessor :: ProcessorId -> IO (ThreadId)
+        startProcessor ("negotiator", 0) = do
+            infoM "Starting negotiator thread ..."
+            forkOS $ runNegotiator zkOpts topology inputSource
+
+        startProcessor pid@(pName, pInstance) = do
+            let processor = (processorMap topology) Map.!  pName
+            case (processorType processor) of
+                Spout ->  do
+                    partition <- indexToPartition inputSource pInstance
+                    infoM $ "Spawning spout for partition '" ++ partition ++ "'"
+                    forkOS $ runSpout zkOpts pName partition topology inputSource uFormula
+                Bolt -> do
+                    infoM $ "Spawning bolt '" ++ pName ++ "'"
+                    forkOS $ runDownstream zkOpts pid topology uFormula snapshotStore
+                Sink -> do
+                    infoM $ "Spawning sink '" ++ pName ++ "'"
+                    forkOS $ runDownstream zkOpts pid topology uFormula snapshotStore
 
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 -- TODO: I'm making this hardcoded topology-specific pending
@@ -40,6 +88,7 @@ localRunner :: ( Show k, Show v, Read k, Read v
 localRunner zkOpts topology formula filename spoutId snapshotStore = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
+    initializeLogging
     quietZK
     let source = FileSource [filename]
 

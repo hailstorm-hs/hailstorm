@@ -2,6 +2,7 @@ module Hailstorm.InputSource
 ( InputSource(..)
 , InputTuple(..)
 , partitionIndex
+, indexToPartition
 ) where
 
 import Data.Maybe
@@ -20,3 +21,6 @@ class InputSource s where
 partitionIndex :: InputSource s => s -> Partition -> IO Int
 partitionIndex s p = allPartitions s >>=
     \ps -> return $ fromJust $ elemIndex p ps
+
+indexToPartition :: InputSource s => s -> Int -> IO (Partition)
+indexToPartition s i = allPartitions s >>= return . (!! i)
