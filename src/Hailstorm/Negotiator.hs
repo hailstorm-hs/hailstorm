@@ -42,9 +42,8 @@ runNegotiator zkOpts topology inputSource = do
         clocks <- untilBoltsLoaded zk topology
         unless (allTheSame clocks) (doubleThrow masterThreadId
             (BadStartupError $ "Bolts started at different points " ++ show clocks))
-
-        clock <- startClock inputSource -- TODO: use above clocks
-        forceSetMasterState zk $ SpoutsRewind clock
+        
+        forceSetMasterState zk $ SpoutsRewind (head clocks)
         _ <- untilSpoutsPaused zk topology
         flowLoop zk
 
