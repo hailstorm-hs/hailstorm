@@ -11,7 +11,7 @@ import Hailstorm.Concurrency
 import Hailstorm.Error
 import Hailstorm.InputSource
 import Hailstorm.Payload
-import Hailstorm.Processor
+import Hailstorm.ProcessorNew
 import Hailstorm.Processor.Pool
 import Hailstorm.Topology
 import Hailstorm.UserFormula
@@ -29,17 +29,17 @@ infoM = L.infoM "Hailstorm.Processor.Spout"
 -- | Start processing with a spout.
 runSpout :: (Topology t, InputSource s)
          => ZKOptions
-         -> ProcessorName
+         -> Spout
+         -> ProcessorInstance
          -> Partition
          -> t
          -> s
          -> UserFormula k v
          -> IO ()
-runSpout zkOpts pName partition topology inputSource uFormula = do
-    index <- partitionIndex inputSource partition
-    let spoutId = (pName, index)
-    
-    groundhogDay (runSpout zkOpts pName partition topology inputSource uFormula) $
+runSpout zkOpts spout nInst partition topology inputSource uFormula = do
+    let spoutId = (processorName spout, nInst)
+
+    groundhogDay (runSpout zkOpts spout nInst partition topology inputSource uFormula) $
         registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
             masterStateMVar <- newEmptyMVar
             tid <- forkOS $ pipeThread zk spoutId masterStateMVar 0
@@ -59,11 +59,11 @@ runSpout zkOpts pName partition topology inputSource uFormula = do
 
                 Right ms -> signalState masterStateMVar ms
 
-    throw $ ZookeeperConnectionError $ "Unable to register spout " ++ pName
+    throw $ ZookeeperConnectionError $ "Unable to register spout " ++ show spoutId
   where
-    signalState mVar ms = tryTakeMVar mVar >> putMVar mVar ms 
+    signalState mVar ms = tryTakeMVar mVar >> putMVar mVar ms
     pipeThread zk spoutId stateMVar offset =
-      let downstream = downstreamPoolConsumer pName topology uFormula
+      let downstream = downstreamPoolConsumer (processorName spout) topology uFormula
           producer = partitionProducer inputSource partition offset
       in runEffect $
         producer >-> spoutStatePipe zk spoutId partition offset uFormula stateMVar >-> downstream
