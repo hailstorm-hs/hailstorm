@@ -16,6 +16,10 @@ Hailstorm requires Apache Zookeeper to run. On OSX, use homebrew and then instal
      cabal install --extra-include-dirs=/usr/local/include/zookeeper hzk
      zkServer start
 
+Or, on Ubuntu:
+
+     sudo apt-get install libzookeeper-mt-dev 
+
 
 Afterwards, you will have to initialize your topology using the zkinit function:
 
