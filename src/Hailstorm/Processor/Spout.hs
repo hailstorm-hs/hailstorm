@@ -52,7 +52,12 @@ runSpout zkOpts pName partition topology inputSource uFormula = do
                     infoM $ "Rewind detected, killing " ++ show oldTid
                     killThread oldTid
                     waitForThreadDead oldTid
-                    let newOffset = pMap Map.! partition
+                    let newOffset = case Map.lookup partition pMap of
+                                      (Just o) -> o
+                                      Nothing -> throw $ BadStartupError $ "Spout partition " 
+                                                         ++ show partition ++ " isn't in the processor map "
+                                                         ++ show pMap 
+                                                         ++ " - did you switch input sources without clearing state?"
                     newTid <- forkOS $ pipeThread zk spoutId masterStateMVar newOffset
                     infoM $ "Rewound thread to " ++ show (partition, newOffset)
                     writeIORef spoutRunnerIdRef newTid

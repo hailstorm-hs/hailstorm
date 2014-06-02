@@ -18,12 +18,10 @@ import qualified System.Log.Logger as L
 errorM :: String -> IO ()
 errorM = L.errorM "Hailstorm.InputSource.KafkaSource"
 
-kafkaTimeout :: Int
-kafkaTimeout = 1000 * 10
-
 data KafkaOptions = KafkaOptions 
   { brokerConnectionString :: String
   , topic :: String 
+  , defaultKafkaTimeout :: Int
   } deriving (Eq, Show)
 
 kafkaFromOptions :: KafkaOptions -> KafkaType -> IO (Either HSError (Kafka, KafkaTopic))
@@ -50,7 +48,7 @@ instance InputSource KafkaSource where
 
     where
       kConsumer kTopic partition = forever $ do
-        me <- lift $ consumeMessage kTopic partition kafkaTimeout
+        me <- lift $ consumeMessage kTopic partition (defaultKafkaTimeout kOpts)
         case me of 
           Left e -> lift $ errorM $ "Got error while consuming from Kafka: " ++ show e
           Right m -> 
@@ -60,7 +58,7 @@ instance InputSource KafkaSource where
 
   allPartitions (KafkaSource kOpts) = do
     (kafka, kTopic) <- forceEitherIO UnexpectedKafkaError $ kafkaFromOptions kOpts KafkaConsumer
-    md <- forceEitherIO UnexpectedKafkaError $ getTopicMetadata kafka kTopic kafkaTimeout
+    md <- forceEitherIO UnexpectedKafkaError $ getTopicMetadata kafka kTopic (defaultKafkaTimeout kOpts)
     forM (topicPartitions md) $ \et -> case et of
         Left _ -> throw UnexpectedKafkaError
         Right tmd -> return $ show $ partitionId tmd

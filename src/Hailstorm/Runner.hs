@@ -6,7 +6,6 @@ import Data.Maybe
 import Data.Monoid
 import Hailstorm.Concurrency
 import Hailstorm.InputSource
-import Hailstorm.InputSource.FileSource
 import Hailstorm.Logging
 import Hailstorm.Negotiator
 import Hailstorm.Processor
@@ -77,20 +76,19 @@ runProcessors zkOpts topology uFormula inputSource snapshotStore pids = do
 -- TODO: I'm making this hardcoded topology-specific pending
 -- discussion of new interface method to add to Topology
 localRunner :: ( Show k, Show v, Read k, Read v
-               , Ord k, Monoid v, SnapshotStore s)
+               , Ord k, Monoid v, InputSource i, SnapshotStore s)
             => ZKOptions
             -> HardcodedTopology
             -> UserFormula k v
-            -> FilePath
             -> ProcessorName
+            -> i
             -> s
             -> IO ()
-localRunner zkOpts topology formula filename spoutId snapshotStore = do
+localRunner zkOpts topology formula spoutId source snapshotStore = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     initializeLogging
     quietZK
-    let source = FileSource [filename]
 
     infoM "Running in local mode"
 
@@ -106,7 +104,9 @@ localRunner zkOpts topology formula filename spoutId snapshotStore = do
     downstreamTids <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
-    spoutTid <- forkOS $ runSpout zkOpts spoutId filename topology source formula
+    spoutPartition <- allPartitions source >>= return . head
+    infoM $ "Spout partition will be " ++ show spoutPartition
+    spoutTid <- forkOS $ runSpout zkOpts spoutId spoutPartition topology source formula
 
     let baseThreads = [(negotiatorTid, "Negotiator"), (spoutTid, "Spout")]
         consumerThreads = map (\tid -> (tid, show tid)) downstreamTids

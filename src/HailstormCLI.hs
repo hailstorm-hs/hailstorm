@@ -3,12 +3,14 @@ module Main (main) where
 import Control.Applicative
 import Control.Monad
 import Data.List.Split
+import Hailstorm.InputSource
 import Hailstorm.InputSource.FileSource
 import Hailstorm.InputSource.KafkaSource
 import Hailstorm.Logging
 import Hailstorm.Processor
 import Hailstorm.Sample.WordCountKafkaEmitter
 import Hailstorm.Sample.WordCountSample
+import Hailstorm.SnapshotStore
 import Hailstorm.SnapshotStore.DirSnapshotStore
 import Hailstorm.Topology
 import Hailstorm.ZKCluster
@@ -24,6 +26,8 @@ data MainOptions = MainOptions
     { optConnect :: String
     , optBrokerConnect :: String 
     , optKafkaTopic :: String
+    , optKafkaTimeout :: Double
+    , optUseKafka :: Bool
     } deriving (Show)
 
 instance Options MainOptions where
@@ -34,6 +38,10 @@ instance Options MainOptions where
             "Kafka Broker connection string"
         <*> simpleOption "topic" "test"
             "Kafka Topic"
+        <*> simpleOption "kafka-timeout" 10 
+            "Standard kafka timeout (seconds)"
+        <*> simpleOption "use-kafka" False
+            "Use kafka as an input source"
 
 -- | Options for subcommands. Empty since subcommands do not take any options.
 data EmptyOptions = EmptyOptions {}
@@ -73,6 +81,7 @@ kafkaOptionsFromMainOptions :: MainOptions -> KafkaOptions
 kafkaOptionsFromMainOptions mainOptions =
     KafkaOptions { brokerConnectionString = optBrokerConnect mainOptions
                  , topic = optKafkaTopic mainOptions
+                 , defaultKafkaTimeout = round $ 1000 * (optKafkaTimeout mainOptions)
                  }
 
 -- | Initializes Zookeeper infrastructure for Hailstorm.
@@ -91,8 +100,17 @@ runSample mainOpts _ _ = do
     -- symlink hailstorm too)
     home <- getEnv "HOME"
     let store = DirSnapshotStore $ home </> "store"
-    HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
-        wordCountFormula  (home </> "test.txt") "words" store
+
+    if optUseKafka mainOpts then
+      runWithSource (KafkaSource $ kafkaOptionsFromMainOptions mainOpts) store
+    else 
+      runWithSource (FileSource [(home </> "test.txt")]) store
+
+    where 
+      runWithSource :: (InputSource s, SnapshotStore o) => s -> o -> IO ()
+      runWithSource source store = 
+        HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
+            wordCountFormula "words" source store
 
 -- | Runs specific processors relative to a topology
 runProcessors :: MainOptions -> RunProcessorOptions -> [String] -> IO ()
@@ -105,13 +123,17 @@ runProcessors mainOpts processorOpts processorMatches = do
         pids = processorIds processorMatches
         store = DirSnapshotStore $ home </> "store"
         zkOpts = (zkOptionsFromMainOptions mainOpts)
-        inputSource = FileSource [home </> "test.txt"]
 
     forM_ pids $ \pid -> case checkProcessor topology pid of 
                     Nothing -> return ()
                     Just x -> error x
         
-    HSR.runProcessors zkOpts topology formula inputSource store pids
+    if optUseKafka mainOpts then
+      HSR.runProcessors zkOpts topology formula (KafkaSource $ kafkaOptionsFromMainOptions mainOpts)
+        store pids
+    else 
+      HSR.runProcessors zkOpts topology formula (FileSource [(home </> "test.txt")])
+        store pids
 
     where 
         processorIds :: [String] -> [ProcessorId]
