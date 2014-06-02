@@ -14,7 +14,6 @@ import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
 import Hailstorm.Topology
-import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.MasterState
 import Hailstorm.ZKCluster.ProcessorState
@@ -29,20 +28,19 @@ infoM = L.infoM "Hailstorm.Processor.Spout"
 -- | Start processing with a spout.
 runSpout :: (Topology t, InputSource s)
          => ZKOptions
-         -> ProcessorName
+         -> Spout
          -> Partition
          -> t
          -> s
-         -> UserFormula k v
          -> IO ()
-runSpout zkOpts pName partition topology inputSource uFormula = do
-    index <- partitionIndex inputSource partition
-    let spoutId = (pName, index)
-    
-    groundhogDay (runSpout zkOpts pName partition topology inputSource uFormula) $
+runSpout zkOpts sp partition topology inputSource = do
+    instNum <- partitionIndex inputSource partition
+    let spoutId = (spoutName sp, instNum)
+
+    groundhogDay (runSpout zkOpts sp partition topology inputSource) $
         registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
             masterStateMVar <- newEmptyMVar
-            tid <- forkOS $ pipeThread zk spoutId masterStateMVar 0
+            tid <- forkOS $ pipeThread zk instNum masterStateMVar 0
             spoutRunnerIdRef <- newIORef tid
 
             watchMasterState zk $ \et -> case et of
@@ -58,29 +56,30 @@ runSpout zkOpts pName partition topology inputSource uFormula = do
                                                          ++ show partition ++ " isn't in the processor map "
                                                          ++ show pMap 
                                                          ++ " - did you switch input sources without clearing state?"
-                    newTid <- forkOS $ pipeThread zk spoutId masterStateMVar newOffset
+                    newTid <- forkOS $ pipeThread zk instNum masterStateMVar newOffset
                     infoM $ "Rewound thread to " ++ show (partition, newOffset)
                     writeIORef spoutRunnerIdRef newTid
 
                 Right ms -> signalState masterStateMVar ms
 
-    throw $ ZookeeperConnectionError $ "Unable to register spout " ++ pName
+    throw $ ZookeeperConnectionError $ "Unable to register spout " ++ show spoutId
   where
-    signalState mVar ms = tryTakeMVar mVar >> putMVar mVar ms 
-    pipeThread zk spoutId stateMVar offset =
-      let downstream = downstreamPoolConsumer pName topology uFormula
+    signalState mVar ms = tryTakeMVar mVar >> putMVar mVar ms
+    pipeThread zk instNum stateMVar offset =
+      let downstream = downstreamPoolConsumer (spoutName sp) topology
           producer = partitionProducer inputSource partition offset
       in runEffect $
-        producer >-> spoutStatePipe zk spoutId partition offset uFormula stateMVar >-> downstream
+        producer >-> spoutStatePipe zk sp instNum partition offset stateMVar >-> downstream
 
 spoutStatePipe :: ZK.Zookeeper
-               -> ProcessorId
+               -> Spout
+               -> ProcessorInstance
                -> Partition
                -> Offset
-               -> UserFormula k v
                -> MVar MasterState
-               -> Pipe InputTuple (Payload k v) IO ()
-spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar = do
+               -> Pipe InputTuple Payload IO ()
+spoutStatePipe zk sp instNum partition lastOffset stateMVar = do
+    let spoutId = (spoutName sp, instNum)
     ms <- lift $ readMVar stateMVar
     case ms of
         Flowing _ -> passOn
@@ -94,13 +93,13 @@ spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar = do
   where
     passOn = do
         InputTuple bs p o <- await
-        yield Payload { payloadTuple = convertFn uFormula bs
+        yield Payload { payloadTuple = convertFn sp bs
                       , payloadPosition = (p, o)
                       , payloadLowWaterMarkMap = Map.singleton partition $
                           Clock $ Map.singleton p o
                       }
-        spoutStatePipe zk spoutId partition o uFormula stateMVar
-    loop = spoutStatePipe zk spoutId partition lastOffset uFormula stateMVar
+        spoutStatePipe zk sp instNum partition o stateMVar
+    loop = spoutStatePipe zk sp instNum partition lastOffset stateMVar
 
 pauseUntilFlowing :: MVar MasterState -> IO ()
 pauseUntilFlowing stateMVar = do

@@ -38,7 +38,7 @@ library
     Hailstorm.SnapshotStore.DirSnapshotStore
     Hailstorm.Topology
     Hailstorm.Topology.HardcodedTopology
-    Hailstorm.UserFormula
+    Hailstorm.TransactionTypes
     Hailstorm.ZKCluster
     Hailstorm.ZKCluster.MasterState
     Hailstorm.ZKCluster.ProcessorState
@@ -87,6 +87,5 @@ executable hailstorm
    , monad-loops
    , haskakafka >= 0.1.0.7
    , stm
-  Other-Modules: Hailstorm.UserFormula
   default-language: Haskell2010
   ghc-options: -Wall -threaded

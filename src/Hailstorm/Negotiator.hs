@@ -103,28 +103,34 @@ allTheSame xs = all (== head xs) (tail xs)
 
 untilBoltsLoaded :: Topology t => ZK.Zookeeper -> t -> IO [Clock]
 untilBoltsLoaded zk t =
-    untilStatesMatch "Waiting for bolts to load : " zk (boltIds t)
+    untilStatesMatch "Waiting for bolts to load : " zk (bolts t)
         (\pStates -> [clock | (BoltLoaded clock) <- pStates])
 
 untilBoltsSaved :: Topology t => ZK.Zookeeper -> t -> Clock -> IO Clock
 untilBoltsSaved zk t clock = do
-    saveClocks <- untilStatesMatch "Waiting for bolts to save: " zk (boltIds t)
+    saveClocks <- untilStatesMatch "Waiting for bolts to save: " zk (bolts t)
         (\pStates -> [clock | (BoltSaved c) <- pStates, clock == c ])
     return $ head saveClocks
 
-untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition,Offset)]
+untilSpoutsPaused :: Topology t => ZK.Zookeeper -> t -> IO [(Partition, Offset)]
 untilSpoutsPaused zk t =
-    untilStatesMatch "Waiting for spouts to pause: " zk (spoutIds t)
+    untilStatesMatch "Waiting for spouts to pause: " zk (spouts t)
         (\pStates -> [(p,o) | (SpoutPaused p o) <- pStates])
 
-untilStatesMatch :: String -> ZK.Zookeeper -> [ProcessorId] -> ([ProcessorState] -> [a]) -> IO [a]
-untilStatesMatch infoString zk pids matcher = do
+untilStatesMatch :: (Processor p)
+                 => String
+                 -> ZK.Zookeeper
+                 -> [p]
+                 -> ([ProcessorState] -> [a])
+                 -> IO [a]
+untilStatesMatch infoString zk ps matcher = do
     stateMap <- forceEitherIO UnknownWorkerException $ getAllProcessorStates zk
-    let pStates = map (\k -> stateMap Map.! k ) pids
+    let pids = concatMap processorIds ps
+        pStates = map (\k -> Map.findWithDefault (error $ "Could not find state " ++ show k) k stateMap ) pids
         matched = matcher pStates
 
-    if length pStates == length matched then return matched
-    else do
-        infoM $ infoString ++ show pStates
-        zkThrottle >> untilStatesMatch infoString zk pids matcher
-
+    if length pStates == length matched
+        then return matched
+        else do
+            infoM $ infoString ++ show pStates
+            zkThrottle >> untilStatesMatch infoString zk ps matcher

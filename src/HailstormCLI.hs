@@ -19,7 +19,6 @@ import Options
 import System.Environment
 import System.FilePath
 import qualified Hailstorm.Runner as HSR
-import qualified Data.Map as Map
 
 -- | Options for the main program.
 data MainOptions = MainOptions 
@@ -110,7 +109,7 @@ runSample mainOpts _ _ = do
       runWithSource :: (InputSource s, SnapshotStore o) => s -> o -> IO ()
       runWithSource source store = 
         HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
-            wordCountFormula "words" source store
+            "words" source store
 
 -- | Runs specific processors relative to a topology
 runProcessors :: MainOptions -> RunProcessorOptions -> [String] -> IO ()
@@ -119,8 +118,7 @@ runProcessors mainOpts processorOpts processorMatches = do
 
     when (optTopology processorOpts /= "word_count") (error $ "Unsupported topology: " ++ show (optTopology processorOpts) )
     let topology = wordCountTopology
-        formula = wordCountFormula -- Change when we merge the two
-        pids = processorIds processorMatches
+        pids = procIds processorMatches
         store = DirSnapshotStore $ home </> "store"
         zkOpts = (zkOptionsFromMainOptions mainOpts)
 
@@ -129,15 +127,15 @@ runProcessors mainOpts processorOpts processorMatches = do
                     Just x -> error x
         
     if optUseKafka mainOpts then
-      HSR.runProcessors zkOpts topology formula (KafkaSource $ kafkaOptionsFromMainOptions mainOpts)
+      HSR.runProcessors zkOpts topology (KafkaSource $ kafkaOptionsFromMainOptions mainOpts)
         store pids
     else 
-      HSR.runProcessors zkOpts topology formula (FileSource [(home </> "test.txt")])
+      HSR.runProcessors zkOpts topology (FileSource [(home </> "test.txt")])
         store pids
 
     where 
-        processorIds :: [String] -> [ProcessorId]
-        processorIds matches = 
+        procIds :: [String] -> [ProcessorId]
+        procIds matches = 
             map (\match -> case (splitOn "-" match) of 
                     [pName, pInstanceStr] -> (pName, read pInstanceStr :: Int)
                     _ -> error $ "Processors must be specified in name-instance format"
@@ -145,7 +143,7 @@ runProcessors mainOpts processorOpts processorMatches = do
 
         checkProcessor :: Topology t => t -> ProcessorId -> Maybe String
         checkProcessor topology (pName, pInstance) = 
-            case Map.lookup pName (processors topology) of
+            case lookupProcessor pName topology of
                 Nothing -> 
                     if pName == "negotiator" && pInstance == 0 then Nothing
                     else Just $ "No processor named " ++ pName

@@ -4,17 +4,17 @@ module Hailstorm.SnapshotStore
 
 import Hailstorm.Clock
 import Hailstorm.Processor
-import qualified Data.Map as Map
+import Hailstorm.TransactionTypes
 
 class SnapshotStore s where
-    saveSnapshot :: (Show k, Show v)
-                 => s
+    saveSnapshot :: s
                  -> ProcessorId
-                 -> Map.Map k v
+                 -> BoltState
+                 -> (BoltState -> String)
                  -> Clock
                  -> IO ()
 
     restoreSnapshot :: s
                     -> ProcessorId
-                    -> (String -> Map.Map k v)
-                    -> IO (Maybe (Map.Map k v), Clock)
+                    -> (String -> BoltState)
+                    -> IO (Maybe BoltState, Clock)

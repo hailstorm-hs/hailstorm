@@ -3,7 +3,6 @@ module Hailstorm.Runner (runProcessors, localRunner) where
 import Control.Concurrent
 import Control.Monad
 import Data.Maybe
-import Data.Monoid
 import Hailstorm.Concurrency
 import Hailstorm.InputSource
 import Hailstorm.Logging
@@ -12,8 +11,8 @@ import Hailstorm.Processor
 import Hailstorm.Processor.Downstream
 import Hailstorm.Processor.Spout
 import Hailstorm.SnapshotStore
+import Hailstorm.Topology
 import Hailstorm.Topology.HardcodedTopology
-import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import System.Exit
 import System.IO
@@ -27,17 +26,14 @@ errorM :: String -> IO ()
 errorM = L.errorM "Hailstorm.Runner"
 
 -- Runs a list of processors on this host
-runProcessors :: (Show k, Show v, Read k, Read v, 
-                  Ord k, Monoid v, SnapshotStore s, InputSource i)
+runProcessors :: (SnapshotStore s, InputSource i)
               => ZKOptions
               -> HardcodedTopology
-              -> UserFormula k v
               -> i
               -> s
               -> [ProcessorId]
               -> IO ()
-
-runProcessors zkOpts topology uFormula inputSource snapshotStore pids = do
+runProcessors zkOpts topology inputSource snapshotStore pids = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     initializeLogging
@@ -59,32 +55,30 @@ runProcessors zkOpts topology uFormula inputSource snapshotStore pids = do
             forkOS $ runNegotiator zkOpts topology
 
         startProcessor pid@(pName, pInstance) = do
-            let processor = (processorMap topology) Map.!  pName
-            case (processorType processor) of
-                Spout ->  do
+            let pr = fromJust $ lookupProcessor pName topology
+            case pr of
+                SpoutNode s ->  do
                     partition <- indexToPartition inputSource pInstance
                     infoM $ "Spawning spout for partition '" ++ partition ++ "'"
-                    forkOS $ runSpout zkOpts pName partition topology inputSource uFormula
-                Bolt -> do
+                    forkOS $ runSpout zkOpts s partition topology inputSource
+                BoltNode _ -> do
                     infoM $ "Spawning bolt '" ++ pName ++ "'"
-                    forkOS $ runDownstream zkOpts pid topology uFormula inputSource snapshotStore
-                Sink -> do
+                    forkOS $ runDownstream zkOpts pid topology inputSource snapshotStore
+                SinkNode _ -> do
                     infoM $ "Spawning sink '" ++ pName ++ "'"
-                    forkOS $ runDownstream zkOpts pid topology uFormula inputSource snapshotStore
+                    forkOS $ runDownstream zkOpts pid topology inputSource snapshotStore
 
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 -- TODO: I'm making this hardcoded topology-specific pending
 -- discussion of new interface method to add to Topology
-localRunner :: ( Show k, Show v, Read k, Read v
-               , Ord k, Monoid v, InputSource i, SnapshotStore s)
+localRunner :: (SnapshotStore s, InputSource i)
             => ZKOptions
             -> HardcodedTopology
-            -> UserFormula k v
             -> ProcessorName
             -> i
             -> s
             -> IO ()
-localRunner zkOpts topology formula spoutId source snapshotStore = do
+localRunner zkOpts topology spName source snapshotStore = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     initializeLogging
@@ -98,7 +92,7 @@ localRunner zkOpts topology formula spoutId source snapshotStore = do
 
     let runDownstreamThread processorTuple = do
             downstreamTid <- forkOS $ runDownstream zkOpts processorTuple
-                topology formula source snapshotStore
+                topology source snapshotStore
             infoM $ "Spawned downstream " ++ show downstreamTid
             return downstreamTid
     downstreamTids <- mapM runDownstreamThread $ (Map.keys . addresses) topology
@@ -106,7 +100,11 @@ localRunner zkOpts topology formula spoutId source snapshotStore = do
 
     spoutPartition <- allPartitions source >>= return . head
     infoM $ "Spout partition will be " ++ show spoutPartition
-    spoutTid <- forkOS $ runSpout zkOpts spoutId spoutPartition topology source formula
+    let sp' = fromJust $ lookupProcessor spName topology
+    spoutTid <-
+        case sp' of
+            SpoutNode sp -> forkOS $ runSpout zkOpts sp spoutPartition topology source
+            _ -> error $ spName ++ " is not a spout"
 
     let baseThreads = [(negotiatorTid, "Negotiator"), (spoutTid, "Spout")]
         consumerThreads = map (\tid -> (tid, show tid)) downstreamTids

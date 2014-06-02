@@ -20,15 +20,15 @@ data DirSnapshotStore = DirSnapshotStore FilePath
 
 instance SnapshotStore DirSnapshotStore where
 
-    saveSnapshot (DirSnapshotStore dir) pId bState clk = do
+    saveSnapshot (DirSnapshotStore dir) pId bState stateSerializeFn clk = do
         createDirectoryIfMissing True dir
         infoM $ "Saving bolt " ++ show pId
         writeFile (dir </> tmpGenStoreFilename pId) $
-            show bState ++ "\1" ++ show clk
+            stateSerializeFn bState ++ "\1" ++ show clk
         renameFile (dir </> tmpGenStoreFilename pId) (dir </> genStoreFilename pId)
         infoM $ "Saved " ++ show pId ++ " to " ++ (dir </> genStoreFilename pId)
 
-    restoreSnapshot (DirSnapshotStore dir) pId stateDeserializer = do
+    restoreSnapshot (DirSnapshotStore dir) pId stateDeserializeFn = do
         let fname = dir </> genStoreFilename pId
         exists <- doesFileExist fname
         if exists
@@ -37,7 +37,7 @@ instance SnapshotStore DirSnapshotStore where
                 contents <- readFile (dir </> genStoreFilename pId)
                 let [bStateS, clkS] = splitOn "\1" contents
                     clk = read clkS :: Clock
-                    bState = stateDeserializer bStateS
+                    bState = stateDeserializeFn bStateS
                 return (Just bState, clk)
             else do
                 infoM $ "No snapshot found for bolt " ++ show pId
