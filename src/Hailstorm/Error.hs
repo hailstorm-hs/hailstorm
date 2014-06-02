@@ -21,6 +21,7 @@ data HSError = UnknownWorkerException
              | ZookeeperConnectionError String
              | RegistrationDeleted
              | HSErrorWrap HSError String
+             | UnexpectedKafkaError
                deriving (Show, Typeable)
 instance Exception HSError
 
