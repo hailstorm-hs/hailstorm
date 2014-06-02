@@ -68,10 +68,10 @@ runProcessors zkOpts topology uFormula inputSource snapshotStore pids = do
                     forkOS $ runSpout zkOpts pName partition topology inputSource uFormula
                 Bolt -> do
                     infoM $ "Spawning bolt '" ++ pName ++ "'"
-                    forkOS $ runDownstream zkOpts pid topology uFormula snapshotStore
+                    forkOS $ runDownstream zkOpts pid topology uFormula inputSource snapshotStore
                 Sink -> do
                     infoM $ "Spawning sink '" ++ pName ++ "'"
-                    forkOS $ runDownstream zkOpts pid topology uFormula snapshotStore
+                    forkOS $ runDownstream zkOpts pid topology uFormula inputSource snapshotStore
 
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 -- TODO: I'm making this hardcoded topology-specific pending
@@ -100,7 +100,7 @@ localRunner zkOpts topology formula filename spoutId snapshotStore = do
 
     let runDownstreamThread processorTuple = do
             downstreamTid <- forkOS $ runDownstream zkOpts processorTuple
-                topology formula snapshotStore
+                topology formula source snapshotStore
             infoM $ "Spawned downstream " ++ show downstreamTid
             return downstreamTid
     downstreamTids <- mapM runDownstreamThread $ (Map.keys . addresses) topology

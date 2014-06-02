@@ -21,6 +21,7 @@ import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Processor.Pool
 import Hailstorm.SnapshotStore
+import Hailstorm.InputSource
 import Hailstorm.Topology
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.MasterState
@@ -33,17 +34,22 @@ import qualified Data.Map as Map
 import qualified Database.Zookeeper as ZK
 import qualified Pipes.Concurrent as PC
 import qualified Network.Socket as NS
+import qualified System.Log.Logger as L
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.Processor.Downstream"
 
 type BoltState k v = Map.Map k v
 
-runDownstream :: (Ord k, Monoid v, Topology t, Show k, Show v, SnapshotStore s)
+runDownstream :: (Ord k, Monoid v, Topology t, Show k, Show v, SnapshotStore s, InputSource i)
               => ZKOptions
               -> ProcessorId
               -> t
               -> UserFormula k v
+              -> i
               -> s
               -> IO ()
-runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
+runDownstream opts dId@(dName, _) topology uformula inputSource snapshotStore = do
     (stateMap', savedClk) <- restoreSnapshot snapshotStore dId $
         deserializeState uformula
 
@@ -63,14 +69,19 @@ runDownstream opts dId@(dName, _) topology uformula snapshotStore = do
                         downstreamPoolConsumer dName topology uformula
                 Sink -> sinkConsumer uformula
                 _ -> throwNoDownstreamError
-        startState = case ctype of
-                         Sink -> SinkRunning
-                         Bolt -> BoltLoaded savedClk
-                         _ -> throwNoDownstreamError
         processSocket s pcOutput = runEffect $
             producer s >-> PC.toOutput pcOutput
 
-    groundhogDay (runDownstream opts dId topology uformula snapshotStore) $ do
+    startState <- case ctype of
+                     Sink -> return $ SinkRunning
+                     Bolt -> if not $ Map.null $ extractClockMap savedClk then return $ BoltLoaded savedClk
+                             else do
+                              startClk <- startClock inputSource
+                              infoM $ "Bolt beginning at start clock " ++ show startClk  
+                              return $ BoltLoaded startClk
+                     _ -> throwNoDownstreamError
+
+    groundhogDay (runDownstream opts dId topology uformula inputSource snapshotStore) $ do
         (pcOutput, pcInput, seal) <- PC.spawn' PC.Unbounded
         serverRef <- newIORef (Nothing :: Maybe ThreadId)
         

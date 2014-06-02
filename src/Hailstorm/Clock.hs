@@ -2,7 +2,6 @@ module Hailstorm.Clock
 ( Clock(..)
 , Partition
 , Offset
-, extractClockMap
 , clockGt
 ) where
 
@@ -11,11 +10,8 @@ import qualified Data.Map as Map
 type Partition = String
 type Offset = Integer
 
-newtype Clock = Clock (Map.Map Partition Offset)
+newtype Clock = Clock {extractClockMap :: Map.Map Partition Offset}
                 deriving (Eq, Show, Read, Ord)
-
-extractClockMap :: Clock -> Map.Map Partition Offset
-extractClockMap (Clock clk) = clk
 
 -- | @c1 `clockGt` @c2@ returns true if @c1@ has the same elements
 -- as @c2@ and is element-wise greater than @c2@.
