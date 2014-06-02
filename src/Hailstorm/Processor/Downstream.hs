@@ -82,7 +82,7 @@ runDownstream opts dId@(dName, _) topology uformula inputSource snapshotStore = 
                      _ -> throwNoDownstreamError
 
     groundhogDay (runDownstream opts dId topology uformula inputSource snapshotStore) $ do
-        (pcOutput, pcInput, seal) <- PC.spawn' PC.Unbounded
+        (pcOutput, pcInput, seal) <- PC.spawn' PC.Single
         serverRef <- newIORef (Nothing :: Maybe ThreadId)
         
         finally (registerProcessor opts dId startState $ \zk -> do

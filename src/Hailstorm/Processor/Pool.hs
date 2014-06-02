@@ -22,7 +22,10 @@ type Port = String
 poolConnect :: (Host, Port) -> Map.Map (Host, Port) Handle -> IO Handle
 poolConnect (host, port) handleMap = case Map.lookup (host, port) handleMap of
     Just h -> return h
-    Nothing -> connect host port $ \(s, _) -> socketToHandle s WriteMode
+    Nothing -> connect host port $ \(s, _) -> do
+              h <- socketToHandle s WriteMode
+              hSetBuffering h LineBuffering
+              return h
 
 -- | Produces a single Consumer comprised of all stream consumer layers of
 -- the topology (bolts and sinks) that subscribe to a emitting processor's
