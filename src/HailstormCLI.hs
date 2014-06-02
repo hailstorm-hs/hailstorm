@@ -38,7 +38,7 @@ instance Options MainOptions where
             "Kafka Broker connection string"
         <*> simpleOption "topic" "test"
             "Kafka Topic"
-        <*> simpleOption "kafka-timeout" 10 
+        <*> simpleOption "kafka-timeout" 60 
             "Standard kafka timeout (seconds)"
         <*> simpleOption "use-kafka" False
             "Use kafka as an input source"
@@ -51,15 +51,12 @@ instance Options EmptyOptions where
 -- | For run_sample_emitter
 data EmitOptions = EmitOptions
     { optEmitSleepMs :: Int
-    , optPartition :: Int
     } deriving (Show)
 
 instance Options EmitOptions where
     defineOptions = pure EmitOptions
         <*> simpleOption "sleep" 10
             "Sleep between emits (ms)."
-        <*> simpleOption "partition" 0
-            "Partition to emit to."
 
 -- | For run_processor
 data RunProcessorOptions = RunProcessorOptions
@@ -161,7 +158,6 @@ runSampleEmitter mainOpts emitOpts _ = do
     emitLinesForever 
         (home </> "test.txt")
         (kafkaOptionsFromMainOptions mainOpts)
-        (optPartition emitOpts)
         (optEmitSleepMs emitOpts)
 
 -- | Main entry point.

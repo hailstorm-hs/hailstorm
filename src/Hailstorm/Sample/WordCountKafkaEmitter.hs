@@ -2,7 +2,6 @@ module Hailstorm.Sample.WordCountKafkaEmitter
     ( emitLinesForever
     ) where
 
-import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
 import Hailstorm.InputSource.KafkaSource
@@ -15,8 +14,8 @@ import qualified Data.ByteString.Char8 as BS
 infoM :: String -> IO ()
 infoM = L.infoM "Hailstorm.Sample/WordCountKafkaEmitter"
 
-emitLinesForever :: FilePath -> KafkaOptions -> Int -> Int -> IO ()
-emitLinesForever fp kOpts partition emitSleepMs = do
+emitLinesForever :: FilePath -> KafkaOptions -> Int -> IO ()
+emitLinesForever fp kOpts emitSleepMs = do
     infoM "Constructing kafka"
     (Right (kafka, kTopic)) <- kafkaFromOptions kOpts KafkaProducer
     infoM "Constructed kafka, beginning emit loop"
@@ -29,10 +28,10 @@ emitLinesForever fp kOpts partition emitSleepMs = do
             infoM "Emitting input file"
             untilM_ (do
                     line <- BS.hGetLine h
-                    let me = KafkaMessage partition 0 line Nothing
-                    merr <- produceMessage kTopic me
+                    merr <- produceMessage kTopic KafkaUnassignedPartition $ KafkaProduceMessage line
 
                     case merr of 
+                        Just (KafkaResponseError RdKafkaRespErrPartitionEof) -> return ()
                         Just e -> infoM $ "Error enqueing kafka message " ++ show e
                         Nothing -> return ()
                     pollEvents kafka emitSleepMs
