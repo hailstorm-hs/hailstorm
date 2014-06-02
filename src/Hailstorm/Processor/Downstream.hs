@@ -125,13 +125,14 @@ socketProducer :: UserFormula k v
                -> Socket
                -> Producer (Payload k v) IO ()
 socketProducer uformula s = do
-    h <- lift $ socketToHandle s ReadMode
+    h <- lift $ socketToHandle s ReadWriteMode
     lift $ hSetBuffering h LineBuffering
     emitNextPayload h
   where
     emitNextPayload h = do
         t <- lift $ hGetLine h
         yield $ deserializePayload t uformula
+        lift $ hPutStrLn h $ "OK"
         emitNextPayload h
 
 -- | Builds a Pipe that receives a payload emitted from a handle and
@@ -188,9 +189,9 @@ boltPipe bId@(bName, _) zk mStateMVar state clk snapshotStore =
                         in passOn preSnapState b' (Just desiredClock)
                     else let a' = mergeWithTuple preSnapState (key, val)
                         in passOn a' postSnapState (Just desiredClock)
-            Nothing ->
+            Nothing -> do
                 let mergedState = preSnapState `mergeStates` postSnapState
-                in passOn (mergeWithTuple mergedState (key, val)) Map.empty Nothing
+                passOn (mergeWithTuple mergedState (key, val)) Map.empty Nothing
 
     mergeWithTuple st (key, val) = Map.unionWith mappend st $
         Map.singleton key val

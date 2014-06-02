@@ -18,6 +18,9 @@ import qualified System.Log.Logger as L
 errorM :: String -> IO ()
 errorM = L.errorM "Hailstorm.InputSource.KafkaSource"
 
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.InputSource.KafkaSource"
+
 data KafkaOptions = KafkaOptions 
   { brokerConnectionString :: String
   , topic :: String 

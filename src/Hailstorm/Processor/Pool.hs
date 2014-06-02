@@ -13,8 +13,13 @@ import Pipes
 import System.IO
 import qualified Data.Map as Map
 
+import qualified System.Log.Logger as L
+
 type Host = String
 type Port = String
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.Processor.Pool"
 
 -- | @poolConnect address handleMap@ will return a handle for communication
 -- with a processor, using an existing handle if one exists in
@@ -23,7 +28,7 @@ poolConnect :: (Host, Port) -> Map.Map (Host, Port) Handle -> IO Handle
 poolConnect (host, port) handleMap = case Map.lookup (host, port) handleMap of
     Just h -> return h
     Nothing -> connect host port $ \(s, _) -> do
-              h <- socketToHandle s WriteMode
+              h <- socketToHandle s ReadWriteMode
               hSetBuffering h LineBuffering
               return h
 
@@ -42,8 +47,12 @@ downstreamPoolConsumer processorName topology uformula = emitToNextLayer Map.emp
         payload <- await
         let sendAddresses = downstreamAddresses topology processorName payload
             getHandle addressTuple = lift $ poolConnect addressTuple connPool
-            emitToHandle h = (lift . hPutStrLn h) $
-                serializePayload payload uformula
+            emitToHandle h = do
+                lift $ hPutStrLn h $ serializePayload payload uformula
+                _ <- lift $ hGetLine h -- Wait for ack 
+                return ()
+
+
         newHandles <- mapM getHandle sendAddresses
         mapM_ emitToHandle newHandles
         let newPool = Map.fromList $ zip sendAddresses newHandles
