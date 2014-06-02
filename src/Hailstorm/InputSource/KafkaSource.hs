@@ -12,7 +12,7 @@ import Hailstorm.InputSource
 import Hailstorm.Error
 import Pipes
 
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified System.Log.Logger as L
 
 errorM :: String -> IO ()
@@ -51,7 +51,7 @@ instance InputSource KafkaSource where
         me <- lift $ consumeMessage kTopic partition (defaultKafkaTimeout kOpts)
         case me of 
           Left e -> lift $ errorM $ "Got error while consuming from Kafka: " ++ show e
-          Right m -> 
+          Right m -> do
             yield $ InputTuple (messagePayload m) 
                                (show $ messagePartition m) 
                                (fromIntegral $ messageOffset m)

@@ -30,7 +30,7 @@ import Network.Simple.TCP
 import Network.Socket(socketToHandle)
 import Pipes
 import System.IO
-import qualified Data.Map as Map
+import qualified Data.Map.Strict as Map
 import qualified Database.Zookeeper as ZK
 import qualified Pipes.Concurrent as PC
 import qualified Network.Socket as NS
@@ -171,6 +171,7 @@ boltPipe bId@(bName, _) zk mStateMVar state clk snapshotStore =
 
                 if canSnapshot desiredSnapClock newLWM lastClock
                     then do
+                        lift $ infoM $ "Perming snapshot at " ++ show desiredSnapClock
                         void <$> lift $ saveState bId zk stateA
                             (fromJust desiredSnapClock) snapshotStore
                         pipeLoop (stateA `mergeStates` stateB) Map.empty
