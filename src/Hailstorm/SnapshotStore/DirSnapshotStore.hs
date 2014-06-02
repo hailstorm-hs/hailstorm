@@ -23,8 +23,10 @@ instance SnapshotStore DirSnapshotStore where
     saveSnapshot (DirSnapshotStore dir) pId bState clk = do
         createDirectoryIfMissing True dir
         infoM $ "Saving bolt " ++ show pId
-        writeFile (dir </> genStoreFilename pId) $
+        writeFile (dir </> tmpGenStoreFilename pId) $
             show bState ++ "\1" ++ show clk
+        renameFile (dir </> tmpGenStoreFilename pId) (dir </> genStoreFilename pId)
+        infoM $ "Saved " ++ show pId ++ " to " ++ (dir </> genStoreFilename pId)
 
     restoreSnapshot (DirSnapshotStore dir) pId stateDeserializer = do
         let fname = dir </> genStoreFilename pId
@@ -43,3 +45,6 @@ instance SnapshotStore DirSnapshotStore where
 
 genStoreFilename :: ProcessorId -> FilePath
 genStoreFilename (pName, pInstance) = pName ++ "-" ++ show pInstance
+
+tmpGenStoreFilename :: ProcessorId -> FilePath
+tmpGenStoreFilename (pName, pInstance) = pName ++ "-" ++ show pInstance ++ ".tmp"
