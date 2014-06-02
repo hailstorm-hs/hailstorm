@@ -70,7 +70,8 @@ lookupTupleInState :: PayloadTuple -> BoltState -> PayloadTuple
 lookupTupleInState tup (MkBoltState dynM) =
     let MonoidMapWrapper m = dynToMMWrapper dynM
         (k, _) = payloadTupleToWordCountTuple tup
-        v = m Map.! k
+        v = Map.findWithDefault
+            (error $ "Could not find " ++ k ++ " in state " ++ show m) k m
     in (MkPayloadTuple $ toDyn (k, v))
 
 wordsSpout :: Spout
