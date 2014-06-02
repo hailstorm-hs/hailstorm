@@ -51,12 +51,15 @@ instance Options EmptyOptions where
 -- | For run_sample_emitter
 data EmitOptions = EmitOptions
     { optEmitSleepMs :: Int
+    , optBatchSize :: Int
     } deriving (Show)
 
 instance Options EmitOptions where
     defineOptions = pure EmitOptions
         <*> simpleOption "sleep" 10
             "Sleep between emits (ms)."
+        <*> simpleOption "batch-size" 50
+            "Emit batch size"
 
 -- | For run_processor
 data RunProcessorOptions = RunProcessorOptions
@@ -159,6 +162,7 @@ runSampleEmitter mainOpts emitOpts _ = do
         (home </> "test.txt")
         (kafkaOptionsFromMainOptions mainOpts)
         (optEmitSleepMs emitOpts)
+        (optBatchSize emitOpts)
 
 -- | Main entry point.
 main :: IO ()

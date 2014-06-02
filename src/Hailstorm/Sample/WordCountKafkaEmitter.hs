@@ -4,6 +4,7 @@ module Hailstorm.Sample.WordCountKafkaEmitter
 
 import Control.Monad
 import Control.Monad.Loops
+import Data.List.Split
 import Hailstorm.InputSource.KafkaSource
 import Haskakafka
 import System.IO
@@ -14,8 +15,8 @@ import qualified Data.ByteString.Char8 as BS
 infoM :: String -> IO ()
 infoM = L.infoM "Hailstorm.Sample/WordCountKafkaEmitter"
 
-emitLinesForever :: FilePath -> KafkaOptions -> Int -> IO ()
-emitLinesForever fp kOpts emitSleepMs = do
+emitLinesForever :: FilePath -> KafkaOptions -> Int -> Int -> IO ()
+emitLinesForever fp kOpts emitSleepMs emitSizeBatch = do
     infoM "Constructing kafka"
     (Right (kafka, kTopic)) <- kafkaFromOptions kOpts KafkaProducer
     infoM "Constructed kafka, beginning emit loop"
@@ -26,15 +27,10 @@ emitLinesForever fp kOpts emitSleepMs = do
         emitLoop kafka kTopic = forever $ do
             h <- openFile fp ReadMode
             infoM "Emitting input file"
-            untilM_ (do
-                    line <- BS.hGetLine h
-                    merr <- produceMessage kTopic KafkaUnassignedPartition $ KafkaProduceMessage line
-
-                    case merr of 
-                        Just (KafkaResponseError RdKafkaRespErrPartitionEof) -> return ()
-                        Just e -> infoM $ "Error enqueing kafka message " ++ show e
-                        Nothing -> return ()
-                    pollEvents kafka emitSleepMs
-                ) (hIsEOF h)
+            messages <- untilM (BS.hGetLine h >>= return . KafkaProduceMessage) (hIsEOF h)
+            forM_ (chunksOf emitSizeBatch messages) $ \msgBatch -> do
+              errs <- produceMessageBatch kTopic KafkaUnassignedPartition msgBatch
+              when ((length errs) > 0) (infoM $ "Error enquining some kafka messages " ++ show errs)
+              pollEvents kafka emitSleepMs
 
             drainOutQueue kafka

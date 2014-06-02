@@ -53,7 +53,10 @@ instance InputSource KafkaSource where
       kConsumer kTopic partition = forever $ do
         me <- lift $ consumeMessage kTopic partition (defaultKafkaTimeout kOpts)
         case me of 
-          Left e -> lift $ errorM $ "Got error while consuming from Kafka: " ++ show e
+          (Left (KafkaResponseError RdKafkaRespErrPartitionEof)) ->
+            lift $ infoM $ "End of partition " ++ show partition ++ ": waiting for producer"
+          Left e -> 
+            lift $ errorM $ "Got error while consuming from Kafka: " ++ show e
           Right m -> do
             yield $ InputTuple (messagePayload m) 
                                (show $ messagePartition m) 
