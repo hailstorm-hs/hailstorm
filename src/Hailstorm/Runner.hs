@@ -56,7 +56,7 @@ runProcessors zkOpts topology uFormula inputSource snapshotStore pids = do
         startProcessor :: ProcessorId -> IO (ThreadId)
         startProcessor ("negotiator", 0) = do
             infoM "Starting negotiator thread ..."
-            forkOS $ runNegotiator zkOpts topology inputSource
+            forkOS $ runNegotiator zkOpts topology
 
         startProcessor pid@(pName, pInstance) = do
             let processor = (processorMap topology) Map.!  pName
@@ -92,7 +92,7 @@ localRunner zkOpts topology formula spoutId source snapshotStore = do
 
     infoM "Running in local mode"
 
-    negotiatorTid <- forkOS $ runNegotiator zkOpts topology source
+    negotiatorTid <- forkOS $ runNegotiator zkOpts topology
     infoM $ "Spawned negotiator " ++ show negotiatorTid
     threadDelay 1000000
 

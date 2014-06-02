@@ -13,13 +13,8 @@ import Pipes
 import System.IO
 import qualified Data.Map as Map
 
-import qualified System.Log.Logger as L
-
 type Host = String
 type Port = String
-
-infoM :: String -> IO ()
-infoM = L.infoM "Hailstorm.Processor.Pool"
 
 -- | @poolConnect address handleMap@ will return a handle for communication
 -- with a processor, using an existing handle if one exists in

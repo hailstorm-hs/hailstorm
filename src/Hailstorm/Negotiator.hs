@@ -7,7 +7,6 @@ import Control.Exception
 import Control.Monad
 import Data.IORef
 import Hailstorm.Clock
-import Hailstorm.InputSource
 import Hailstorm.Error
 import Hailstorm.Processor
 import Hailstorm.ZKCluster
@@ -27,8 +26,8 @@ snapshotInterval = 10 * 1000 * 1000
 snapshotThrottle :: IO ()
 snapshotThrottle = threadDelay snapshotInterval
 
-runNegotiator :: (Topology t, InputSource s) => ZKOptions -> t -> s -> IO ()
-runNegotiator zkOpts topology inputSource = do
+runNegotiator :: (Topology t) => ZKOptions -> t -> IO ()
+runNegotiator zkOpts topology = do
     fullChildrenThreadId <- newIORef (Nothing :: Maybe ThreadId)
     registerProcessor zkOpts ("negotiator", 0) UnspecifiedState $ \zk ->
         forceEitherIO
