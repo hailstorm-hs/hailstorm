@@ -3,7 +3,7 @@ module Hailstorm.Processor.Pool
 ) where
 
 import Data.ByteString.Char8 ()
-import Hailstorm.UserFormula
+import Data.Maybe
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Topology
@@ -31,17 +31,17 @@ poolConnect (host, port) handleMap = case Map.lookup (host, port) handleMap of
 downstreamPoolConsumer :: Topology t
                    => ProcessorName
                    -> t
-                   -> UserFormula k v
-                   -> Consumer (Payload k v) IO ()
-downstreamPoolConsumer processorName topology uformula = emitToNextLayer Map.empty
+                   -> Consumer Payload IO ()
+downstreamPoolConsumer pName topology = emitToNextLayer Map.empty
   where
     emitToNextLayer connPool = do
         payload <- await
-        let sendAddresses = downstreamAddresses topology processorName payload
+        let sendAddresses = downstreamAddresses topology pName payload
             getHandle addressTuple = lift $ poolConnect addressTuple connPool
             emitToHandle h = (lift . hPutStrLn h) $
-                serializePayload payload uformula
+                serializePayload payload $ serializer pr
         newHandles <- mapM getHandle sendAddresses
         mapM_ emitToHandle newHandles
         let newPool = Map.fromList $ zip sendAddresses newHandles
         emitToNextLayer $ Map.union newPool connPool
+    pr = fromJust $ lookupProcessor pName topology

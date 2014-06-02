@@ -7,31 +7,31 @@ module Hailstorm.Payload
 import Data.List
 import Data.List.Split
 import Hailstorm.Clock
-import Hailstorm.UserFormula
 import Hailstorm.Processor
+import Hailstorm.TransactionTypes
 import qualified Data.Map as Map
 
-data Payload k v = Payload
-    { payloadTuple :: (k, v)
+data Payload = Payload
+    { payloadTuple :: PayloadTuple
     , payloadPosition :: (Partition, Offset)
     , payloadLowWaterMarkMap :: Map.Map ProcessorName Clock
-    } deriving (Eq, Show, Read)
+    }
 
-serializePayload :: Payload k v
-                 -> UserFormula k v
+serializePayload :: Payload
+                 -> (PayloadTuple -> String)
                  -> String
-serializePayload payload uFormula =
+serializePayload payload serializeFn =
     intercalate "\1"
-        [ serialize uFormula (payloadTuple payload)
+        [ serializeFn $ payloadTuple payload
         , show (payloadPosition payload)
         , show (payloadLowWaterMarkMap payload) ]
 
 deserializePayload :: String
-                   -> UserFormula k v
-                   -> Payload k v
-deserializePayload payloadStr uFormula =
+                   -> (String -> PayloadTuple)
+                   -> Payload
+deserializePayload payloadStr deserializeFn =
     let [sTuple, sPos, sLWMMap] = splitOn "\1" payloadStr
-        tuple = deserialize uFormula sTuple
+        tuple = deserializeFn sTuple
         position = read sPos :: (Partition, Offset)
         lwmMap = read sLWMMap :: Map.Map ProcessorName Clock
     in Payload tuple position lwmMap

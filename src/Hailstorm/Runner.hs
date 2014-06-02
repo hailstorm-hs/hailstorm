@@ -3,7 +3,6 @@ module Hailstorm.Runner (localRunner) where
 import Control.Concurrent
 import Control.Monad
 import Data.Maybe
-import Data.Monoid
 import Hailstorm.Concurrency
 import Hailstorm.InputSource.FileSource
 import Hailstorm.Negotiator
@@ -11,8 +10,8 @@ import Hailstorm.Processor
 import Hailstorm.Processor.Spout
 import Hailstorm.Processor.Downstream
 import Hailstorm.SnapshotStore
+import Hailstorm.Topology
 import Hailstorm.Topology.HardcodedTopology
-import Hailstorm.UserFormula
 import Hailstorm.ZKCluster
 import System.Exit
 import System.IO
@@ -28,16 +27,14 @@ errorM = L.errorM "Hailstorm.Runner"
 -- TODO: this needs to be cleaned out. Currently hardcoded.
 -- TODO: I'm making this hardcoded topology-specific pending
 -- discussion of new interface method to add to Topology
-localRunner :: ( Show k, Show v, Read k, Read v
-               , Ord k, Monoid v, SnapshotStore s)
+localRunner :: (SnapshotStore s)
             => ZKOptions
             -> HardcodedTopology
-            -> UserFormula k v
             -> FilePath
             -> ProcessorName
             -> s
             -> IO ()
-localRunner zkOpts topology formula filename spoutId snapshotStore = do
+localRunner zkOpts topology filename spName snapshotStore = do
     hSetBuffering stdout LineBuffering
     hSetBuffering stderr LineBuffering
     quietZK
@@ -51,13 +48,17 @@ localRunner zkOpts topology formula filename spoutId snapshotStore = do
 
     let runDownstreamThread processorTuple = do
             downstreamTid <- forkOS $ runDownstream zkOpts processorTuple
-                topology formula snapshotStore
+                topology snapshotStore
             infoM $ "Spawned downstream " ++ show downstreamTid
             return downstreamTid
     downstreamTids <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
-    spoutTid <- forkOS $ runSpout zkOpts spoutId filename topology source formula
+    let sp' = fromJust $ lookupProcessor spName topology
+    spoutTid <-
+        case sp' of
+            SpoutNode sp -> forkOS $ runSpout zkOpts sp 0 filename topology source
+            _ -> error "given name is not a spout"
 
     let baseThreads = [(negotiatorTid, "Negotiator"), (spoutTid, "Spout")]
         consumerThreads = map (\tid -> (tid, show tid)) downstreamTids

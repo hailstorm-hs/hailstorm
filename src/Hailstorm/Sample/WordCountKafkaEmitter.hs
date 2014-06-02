@@ -2,7 +2,6 @@ module Hailstorm.Sample.WordCountKafkaEmitter
     ( emitLinesForever
     ) where
 
-import Control.Exception
 import Control.Monad
 import Control.Monad.Loops
 import Hailstorm.InputSource.KafkaSource

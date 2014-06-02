@@ -77,7 +77,7 @@ runSample mainOpts _ _ = do
     initializeLogging
     let store = DirSnapshotStore $ home </> "store"
     HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
-        wordCountFormula  (home </> "test.txt") "words" store
+        (home </> "test.txt") "words" store
 
 runSampleEmitter :: MainOptions -> EmitOptions -> [String] -> IO ()
 runSampleEmitter mainOpts emitOpts _ = do
