@@ -204,6 +204,7 @@ main :: IO ()
 main = runSubcommand
     [ subcommand "zk_init" zkInit
     , subcommand "zk_show" zkShow
+    , subcommand "run_processor" runProcessors
     , subcommand "run_processors" runProcessors
     , subcommand "run_sample" runSample
     , subcommand "run_sample_emitter" runSampleEmitter
