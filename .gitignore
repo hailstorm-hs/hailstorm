@@ -4,3 +4,4 @@ cabal.sandbox.config
 .local.vimrc
 .bundle/
 bin/
+.store/

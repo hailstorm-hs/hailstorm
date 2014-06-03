@@ -47,8 +47,8 @@ instance Options MainOptions where
             "Standard kafka timeout (seconds)"
         <*> simpleOption "use-kafka" False
             "Use kafka as an input source"
-        <*> simpleOption "store" "~/store"
-            "Directory to use as snapshot store"
+        <*> simpleOption "store" ".store"
+            "Directory to use as snapshot store (default: .store directory in current)"
         <*> defineOption optionType_string (\o -> o
             { optionLongFlags = ["file"]
             , optionShortFlags = "f"
