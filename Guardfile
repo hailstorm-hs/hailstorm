@@ -24,4 +24,8 @@ guard :shell do
       end
     end
   end
+  watch(/\.store\/.*/) do |m|
+    puts "Snapshot changed: #{m[0]}".cyan
+    puts IO.read(m[0]).yellow
+  end
 end
