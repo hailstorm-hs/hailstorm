@@ -25,7 +25,7 @@ infoM = L.infoM "Hailstorm.Runner"
 errorM :: String -> IO ()
 errorM = L.errorM "Hailstorm.Runner"
 
--- Runs a list of processors on this host
+-- Runs a list of processors on this host.
 runProcessors :: (SnapshotStore s, InputSource i)
               => ZKOptions
               -> HardcodedTopology
@@ -34,43 +34,37 @@ runProcessors :: (SnapshotStore s, InputSource i)
               -> [ProcessorId]
               -> IO ()
 runProcessors zkOpts topology inputSource snapshotStore pids = do
-    hSetBuffering stdout LineBuffering
-    hSetBuffering stderr LineBuffering
-    initializeLogging
-    quietZK
+    prepareRunner
 
     tids <- forM pids startProcessor
-    forever $ do
+    unless (null pids) $ forever $ do
         forM_ tids $ \tid -> do
             dead <- threadDead tid
             when dead $ do
-                errorM $ "Processor thread terminated: shutting down"
+                errorM "Processor thread terminated: shutting down"
                 exitWith $ ExitFailure 1
         threadDelay $ 1000 * 1000
 
-    where
-        startProcessor :: ProcessorId -> IO (ThreadId)
-        startProcessor ("negotiator", 0) = do
-            infoM "Starting negotiator thread ..."
-            forkOS $ runNegotiator zkOpts topology
+  where
+    startProcessor :: ProcessorId -> IO ThreadId
+    startProcessor ("negotiator", 0) = do
+        infoM "Starting negotiator thread ..."
+        forkOS $ runNegotiator zkOpts topology
 
-        startProcessor pid@(pName, pInstance) = do
-            let pr = fromJust $ lookupProcessor pName topology
-            case pr of
-                SpoutNode s ->  do
-                    partition <- indexToPartition inputSource pInstance
-                    infoM $ "Spawning spout for partition '" ++ partition ++ "'"
-                    forkOS $ runSpout zkOpts s partition topology inputSource
-                BoltNode _ -> do
-                    infoM $ "Spawning bolt '" ++ pName ++ "'"
-                    forkOS $ runDownstream zkOpts pid topology inputSource snapshotStore
-                SinkNode _ -> do
-                    infoM $ "Spawning sink '" ++ pName ++ "'"
-                    forkOS $ runDownstream zkOpts pid topology inputSource snapshotStore
+    startProcessor pid@(pName, pInstance) = do
+        let pr = fromJust $ lookupProcessor pName topology
+        case pr of
+            SpoutNode s ->  do
+                partition <- indexToPartition inputSource pInstance
+                infoM $ "Spawning spout for partition '" ++ partition ++ "'"
+                forkOS $ runSpout zkOpts s partition topology inputSource
+            BoltNode _ -> do
+                infoM $ "Spawning bolt '" ++ pName ++ "'"
+                forkOS $ runDownstream zkOpts pid topology inputSource snapshotStore
+            SinkNode _ -> do
+                infoM $ "Spawning sink '" ++ pName ++ "'"
+                forkOS $ runDownstream zkOpts pid topology inputSource snapshotStore
 
--- TODO: this needs to be cleaned out. Currently hardcoded.
--- TODO: I'm making this hardcoded topology-specific pending
--- discussion of new interface method to add to Topology
 localRunner :: (SnapshotStore s, InputSource i)
             => ZKOptions
             -> HardcodedTopology
@@ -79,12 +73,8 @@ localRunner :: (SnapshotStore s, InputSource i)
             -> s
             -> IO ()
 localRunner zkOpts topology spName source snapshotStore = do
-    hSetBuffering stdout LineBuffering
-    hSetBuffering stderr LineBuffering
-    initializeLogging
-    quietZK
-
     infoM "Running in local mode"
+    prepareRunner
 
     negotiatorTid <- forkOS $ runNegotiator zkOpts topology
     infoM $ "Spawned negotiator " ++ show negotiatorTid
@@ -98,7 +88,7 @@ localRunner zkOpts topology spName source snapshotStore = do
     downstreamTids <- mapM runDownstreamThread $ (Map.keys . addresses) topology
     threadDelay 1000000
 
-    spoutPartition <- allPartitions source >>= return . head
+    spoutPartition <- liftM head (allPartitions source)
     infoM $ "Spout partition will be " ++ show spoutPartition
     let sp' = fromJust $ lookupProcessor spName topology
     spoutTid <-
@@ -119,3 +109,10 @@ localRunner zkOpts topology spName source snapshotStore = do
                     exitWith $ ExitFailure 1
               ) (Map.keys threadToName)
         threadDelay $ 1000 * 1000
+
+prepareRunner :: IO ()
+prepareRunner = do
+    hSetBuffering stdout LineBuffering
+    hSetBuffering stderr LineBuffering
+    initializeLogging
+    quietZK

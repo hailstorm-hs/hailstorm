@@ -3,6 +3,7 @@ module Main (main) where
 import Control.Applicative
 import Control.Monad
 import Data.List.Split
+import Data.Maybe
 import Hailstorm.InputSource
 import Hailstorm.InputSource.FileSource
 import Hailstorm.InputSource.KafkaSource
@@ -13,6 +14,7 @@ import Hailstorm.Sample.WordCountSample
 import Hailstorm.SnapshotStore
 import Hailstorm.SnapshotStore.DirSnapshotStore
 import Hailstorm.Topology
+import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.ProcessorState
 import Options
@@ -20,6 +22,7 @@ import System.Directory
 import System.FilePath
 import qualified Hailstorm.Runner as HSR
 import qualified Data.Foldable
+import qualified Data.Map as Map
 
 -- | Options for the main program.
 data MainOptions = MainOptions
@@ -79,7 +82,7 @@ data RunProcessorOptions = RunProcessorOptions
 instance Options RunProcessorOptions where
     defineOptions = pure RunProcessorOptions
         <*> simpleOption "topology" "word_count"
-            "Topology to use (default: word_count)"
+            "Topology to use"
 
 -- | Builds Zookeeper options from command line options.
 zkOptionsFromMainOptions :: MainOptions -> ZKOptions
@@ -93,6 +96,10 @@ kafkaOptionsFromMainOptions mainOptions =
                  , topic = optKafkaTopic mainOptions
                  , defaultKafkaTimeout = round $ 1000 * optKafkaTimeout mainOptions
                  }
+
+sampleTopologyMap :: Map.Map String HardcodedTopology
+sampleTopologyMap = Map.fromList
+    [("word_count", wordCountTopology)]
 
 fullPath :: FilePath -> FilePath -> FilePath
 fullPath homeDir s =
@@ -143,13 +150,15 @@ runSample mainOpts _ _ = do
     runWithSource = HSR.localRunner
         (zkOptionsFromMainOptions mainOpts) wordCountTopology "words"
 
--- | Runs specific processors relative to a topology
+-- | Runs specific processors relative to a topology.
 runProcessors :: MainOptions -> RunProcessorOptions -> [String] -> IO ()
 runProcessors mainOpts processorOpts processorMatches = do
-    -- TODO: what's going on here?
-    when (optTopology processorOpts /= "word_count") (error $ "Unsupported topology: " ++ show (optTopology processorOpts) )
-    let topology = wordCountTopology
-        pids = procIds processorMatches
+    let topologyStr = optTopology processorOpts
+        topology = fromMaybe (error $ "Unsupported topology: " ++ topologyStr)
+            (Map.lookup topologyStr sampleTopologyMap)
+        pids = if null processorMatches
+                   then error "No processors specified"
+                   else procIds processorMatches
         zkOpts = zkOptionsFromMainOptions mainOpts
     store <- createSnapshotStore mainOpts
 
@@ -167,17 +176,17 @@ runProcessors mainOpts processorOpts processorMatches = do
         procIds = map $
             \match -> case splitOn "-" match of
                           [pName, pInstanceStr] -> (pName, read pInstanceStr :: Int)
-                          _ -> error "Processors must be specified in name-instance format"
+                          _ -> error $ "Processor " ++ show match ++ " not in name-instance format"
 
         checkProcessor :: Topology t => t -> ProcessorId -> Maybe String
         checkProcessor topology (pName, pInstance) =
             case lookupProcessor pName topology of
                 Nothing ->
                     if pName == "negotiator" && pInstance == 0 then Nothing
-                    else Just $ "No processor named " ++ pName
+                    else Just $ "No processor named " ++ show pName
                 Just processor ->
                     if pInstance >= parallelism processor then
-                        Just $ "No processor instance " ++ show pInstance ++ " for " ++ pName
+                        Just $ "No processor instance " ++ show pInstance ++ " for " ++ show pName
                     else Nothing
 
 runSampleEmitter :: MainOptions -> EmitOptions -> [String] -> IO ()
