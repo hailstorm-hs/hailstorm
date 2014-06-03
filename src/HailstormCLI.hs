@@ -19,6 +19,7 @@ import Options
 import System.Directory
 import System.FilePath
 import qualified Hailstorm.Runner as HSR
+import qualified Data.Foldable
 
 -- | Options for the main program.
 data MainOptions = MainOptions
@@ -90,7 +91,7 @@ kafkaOptionsFromMainOptions :: MainOptions -> KafkaOptions
 kafkaOptionsFromMainOptions mainOptions =
     KafkaOptions { brokerConnectionString = optBrokerConnect mainOptions
                  , topic = optKafkaTopic mainOptions
-                 , defaultKafkaTimeout = round $ 1000 * (optKafkaTimeout mainOptions)
+                 , defaultKafkaTimeout = round $ 1000 * optKafkaTimeout mainOptions
                  }
 
 fullPath :: FilePath -> FilePath -> FilePath
@@ -139,9 +140,8 @@ runSample mainOpts _ _ = do
 
   where
     runWithSource :: (InputSource s, SnapshotStore o) => s -> o -> IO ()
-    runWithSource source store =
-        HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
-            "words" source store
+    runWithSource = HSR.localRunner
+        (zkOptionsFromMainOptions mainOpts) wordCountTopology "words"
 
 -- | Runs specific processors relative to a topology
 runProcessors :: MainOptions -> RunProcessorOptions -> [String] -> IO ()
@@ -150,12 +150,10 @@ runProcessors mainOpts processorOpts processorMatches = do
     when (optTopology processorOpts /= "word_count") (error $ "Unsupported topology: " ++ show (optTopology processorOpts) )
     let topology = wordCountTopology
         pids = procIds processorMatches
-        zkOpts = (zkOptionsFromMainOptions mainOpts)
+        zkOpts = zkOptionsFromMainOptions mainOpts
     store <- createSnapshotStore mainOpts
 
-    forM_ pids $ \pid -> case checkProcessor topology pid of
-                    Nothing -> return ()
-                    Just x -> error x
+    forM_ pids $ \pid -> Data.Foldable.forM_ (checkProcessor topology pid) error
 
     if optUseKafka mainOpts
         then HSR.runProcessors zkOpts topology
@@ -166,11 +164,10 @@ runProcessors mainOpts processorOpts processorMatches = do
 
     where
         procIds :: [String] -> [ProcessorId]
-        procIds matches =
-            map (\match -> case (splitOn "-" match) of
-                    [pName, pInstanceStr] -> (pName, read pInstanceStr :: Int)
-                    _ -> error $ "Processors must be specified in name-instance format"
-                ) matches
+        procIds = map $
+            \match -> case splitOn "-" match of
+                          [pName, pInstanceStr] -> (pName, read pInstanceStr :: Int)
+                          _ -> error "Processors must be specified in name-instance format"
 
         checkProcessor :: Topology t => t -> ProcessorId -> Maybe String
         checkProcessor topology (pName, pInstance) =
@@ -179,7 +176,7 @@ runProcessors mainOpts processorOpts processorMatches = do
                     if pName == "negotiator" && pInstance == 0 then Nothing
                     else Just $ "No processor named " ++ pName
                 Just processor ->
-                    if pInstance >= (parallelism processor) then
+                    if pInstance >= parallelism processor then
                         Just $ "No processor instance " ++ show pInstance ++ " for " ++ pName
                     else Nothing
 
