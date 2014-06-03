@@ -16,17 +16,19 @@ import Hailstorm.Topology
 import Hailstorm.ZKCluster
 import Hailstorm.ZKCluster.ProcessorState
 import Options
-import System.Environment
+import System.Directory
 import System.FilePath
 import qualified Hailstorm.Runner as HSR
 
 -- | Options for the main program.
-data MainOptions = MainOptions 
+data MainOptions = MainOptions
     { optConnect :: String
-    , optBrokerConnect :: String 
+    , optBrokerConnect :: String
     , optKafkaTopic :: String
     , optKafkaTimeout :: Double
     , optUseKafka :: Bool
+    , optStore :: FilePath
+    , optFile :: FilePath
     } deriving (Show)
 
 instance Options MainOptions where
@@ -37,10 +39,18 @@ instance Options MainOptions where
             "Kafka Broker connection string"
         <*> simpleOption "topic" "test"
             "Kafka Topic"
-        <*> simpleOption "kafka-timeout" 60 
+        <*> simpleOption "kafka-timeout" 60
             "Standard kafka timeout (seconds)"
         <*> simpleOption "use-kafka" False
             "Use kafka as an input source"
+        <*> simpleOption "store" "~/store"
+            "Directory to use as snapshot store"
+        <*> defineOption optionType_string (\o -> o
+            { optionLongFlags = ["file"]
+            , optionShortFlags = "f"
+            , optionDefault = ""
+            , optionDescription = "Path to file to use as source for stream"
+            })
 
 -- | Options for subcommands. Empty since subcommands do not take any options.
 data EmptyOptions = EmptyOptions {}
@@ -60,7 +70,7 @@ instance Options EmitOptions where
         <*> simpleOption "batch-size" 50
             "Emit batch size"
 
--- | For run_processor
+-- | For run_processors
 data RunProcessorOptions = RunProcessorOptions
     { optTopology :: String
     } deriving (Show)
@@ -75,13 +85,37 @@ zkOptionsFromMainOptions :: MainOptions -> ZKOptions
 zkOptionsFromMainOptions mainOptions =
     ZKOptions { connectionString = optConnect mainOptions }
 
--- | Builds Kafka options from command line options
+-- | Builds Kafka options from command line options.
 kafkaOptionsFromMainOptions :: MainOptions -> KafkaOptions
 kafkaOptionsFromMainOptions mainOptions =
     KafkaOptions { brokerConnectionString = optBrokerConnect mainOptions
                  , topic = optKafkaTopic mainOptions
                  , defaultKafkaTimeout = round $ 1000 * (optKafkaTimeout mainOptions)
                  }
+
+fullPath :: FilePath -> FilePath -> FilePath
+fullPath homeDir s =
+    case splitPath s of
+        "~/":s' -> joinPath $ homeDir:s'
+        ["~"]   -> homeDir
+        _       -> s
+
+getFullPath :: FilePath -> IO FilePath
+getFullPath p = do
+    homeDir <- getHomeDirectory
+    return $ fullPath homeDir p
+
+createSnapshotStore :: MainOptions -> IO DirSnapshotStore
+createSnapshotStore mainOptions = do
+    d <- getFullPath (optStore mainOptions)
+    return $ DirSnapshotStore d
+
+getStreamSourceFile :: MainOptions -> IO FilePath
+getStreamSourceFile mainOptions = do
+    let fp = optFile mainOptions
+    if null fp
+        then error "No stream source file specified (use the -f option)"
+        else getFullPath fp
 
 -- | Initializes Zookeeper infrastructure for Hailstorm.
 zkInit :: MainOptions -> EmptyOptions -> [String] -> IO ()
@@ -95,56 +129,53 @@ zkShow mainOpts _ _ =
 -- | Runs the sample scenario and topology.
 runSample :: MainOptions -> EmptyOptions -> [String] -> IO ()
 runSample mainOpts _ _ = do
-    -- NOTE: Symlink data/test.txt to ~ for convenience (assuming you
-    -- symlink hailstorm too)
-    home <- getEnv "HOME"
-    let store = DirSnapshotStore $ home </> "store"
+    store <- createSnapshotStore mainOpts
 
-    if optUseKafka mainOpts then
-      runWithSource (KafkaSource $ kafkaOptionsFromMainOptions mainOpts) store
-    else 
-      runWithSource (FileSource [(home </> "test.txt")]) store
+    if optUseKafka mainOpts
+        then runWithSource (KafkaSource $ kafkaOptionsFromMainOptions mainOpts) store
+        else do
+            f <- getStreamSourceFile mainOpts
+            runWithSource (FileSource [f]) store
 
-    where 
-      runWithSource :: (InputSource s, SnapshotStore o) => s -> o -> IO ()
-      runWithSource source store = 
+  where
+    runWithSource :: (InputSource s, SnapshotStore o) => s -> o -> IO ()
+    runWithSource source store =
         HSR.localRunner (zkOptionsFromMainOptions mainOpts) wordCountTopology
             "words" source store
 
 -- | Runs specific processors relative to a topology
 runProcessors :: MainOptions -> RunProcessorOptions -> [String] -> IO ()
 runProcessors mainOpts processorOpts processorMatches = do
-    home <- getEnv "HOME"
-
+    -- TODO: what's going on here?
     when (optTopology processorOpts /= "word_count") (error $ "Unsupported topology: " ++ show (optTopology processorOpts) )
     let topology = wordCountTopology
         pids = procIds processorMatches
-        store = DirSnapshotStore $ home </> "store"
         zkOpts = (zkOptionsFromMainOptions mainOpts)
+    store <- createSnapshotStore mainOpts
 
-    forM_ pids $ \pid -> case checkProcessor topology pid of 
+    forM_ pids $ \pid -> case checkProcessor topology pid of
                     Nothing -> return ()
                     Just x -> error x
-        
-    if optUseKafka mainOpts then
-      HSR.runProcessors zkOpts topology (KafkaSource $ kafkaOptionsFromMainOptions mainOpts)
-        store pids
-    else 
-      HSR.runProcessors zkOpts topology (FileSource [(home </> "test.txt")])
-        store pids
 
-    where 
+    if optUseKafka mainOpts
+        then HSR.runProcessors zkOpts topology
+            (KafkaSource $ kafkaOptionsFromMainOptions mainOpts) store pids
+        else do
+            fp <- getStreamSourceFile mainOpts
+            HSR.runProcessors zkOpts topology (FileSource [fp]) store pids
+
+    where
         procIds :: [String] -> [ProcessorId]
-        procIds matches = 
-            map (\match -> case (splitOn "-" match) of 
+        procIds matches =
+            map (\match -> case (splitOn "-" match) of
                     [pName, pInstanceStr] -> (pName, read pInstanceStr :: Int)
                     _ -> error $ "Processors must be specified in name-instance format"
                 ) matches
 
         checkProcessor :: Topology t => t -> ProcessorId -> Maybe String
-        checkProcessor topology (pName, pInstance) = 
+        checkProcessor topology (pName, pInstance) =
             case lookupProcessor pName topology of
-                Nothing -> 
+                Nothing ->
                     if pName == "negotiator" && pInstance == 0 then Nothing
                     else Just $ "No processor named " ++ pName
                 Just processor ->
@@ -154,10 +185,10 @@ runProcessors mainOpts processorOpts processorMatches = do
 
 runSampleEmitter :: MainOptions -> EmitOptions -> [String] -> IO ()
 runSampleEmitter mainOpts emitOpts _ = do
-    home <- getEnv "HOME"
+    fp <- getStreamSourceFile mainOpts
     initializeLogging
-    emitLinesForever 
-        (home </> "test.txt")
+    emitLinesForever
+        fp
         (kafkaOptionsFromMainOptions mainOpts)
         (optEmitSleepMs emitOpts)
         (optBatchSize emitOpts)
@@ -167,7 +198,6 @@ main :: IO ()
 main = runSubcommand
     [ subcommand "zk_init" zkInit
     , subcommand "zk_show" zkShow
-    , subcommand "run_processor" runProcessors
     , subcommand "run_processors" runProcessors
     , subcommand "run_sample" runSample
     , subcommand "run_sample_emitter" runSampleEmitter

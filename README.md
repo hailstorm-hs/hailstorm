@@ -18,7 +18,7 @@ Hailstorm requires Apache Zookeeper to run. On OSX, use homebrew and then instal
 
 Or, on Ubuntu:
 
-     sudo apt-get install libzookeeper-mt-dev 
+     sudo apt-get install libzookeeper-mt-dev
 
 
 Afterwards, you will have to initialize your topology using the zkinit function:
@@ -27,7 +27,7 @@ Afterwards, you will have to initialize your topology using the zkinit function:
 
 Finally, run a sample topology
 
-     hailstorm run_sample
+     hailstorm -f data/test.txt run_sample
 
 While it is running, you can extract debug metadata by executing
 
