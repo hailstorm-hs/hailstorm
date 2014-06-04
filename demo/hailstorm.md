@@ -15,12 +15,13 @@ Thomas Dimson & Milind Ganjoo
 ---
 
 layout: false
+class: center
 
 # A Guessing Game
 
-.center[.full-width-image[![Alt text](in_common.png)]]
+.full-width-image[![Alt text](in_common.png)]
 
-.center.medium[ What do these have in common?]
+.medium[What do these have in common?]
 
 ---
 
