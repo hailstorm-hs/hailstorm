@@ -5,3 +5,4 @@ cabal.sandbox.config
 .bundle/
 bin/
 .store/
+log-cleaner.log
