@@ -84,8 +84,10 @@ killFromRef zk ioRef children = do
     case mt of
         Just tid -> do
             killThread tid
+            writeIORef ioRef Nothing
             mapM_ (\child ->
                     unless (child == "negotiator-0") $ do
+                        infoM $ "Negotiator is rebooting processor " ++ child
                         _ <- ZK.delete zk (zkLivingProcessorsNode ++ "/" ++ child) Nothing
                         return ()
                    ) children
