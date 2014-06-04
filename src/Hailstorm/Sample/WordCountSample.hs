@@ -135,7 +135,7 @@ topNBolt :: Bolt
 topNBolt = Bolt
     { boltName = "topn"
 
-    , boltParallelism = 1
+    , boltParallelism = 2
 
     , upstreamDeserializer = readTISPayloadTuple
 

@@ -84,6 +84,7 @@ registerProcessor opts pid initialState action =
     withConnection opts $ \zk -> do
         me <- ZK.create zk (zkProcessorNode pid)
             (Just $ serializeZK initialState) ZK.OpenAclUnsafe [ZK.Ephemeral]
+        infoM $ "Registered  " ++ show pid
         case me of
             Left e  -> errorM $
                 "Error while registering " ++ show pid ++ ": " ++ show e

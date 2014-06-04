@@ -68,8 +68,9 @@ runNegotiator zkOpts topology = do
             Right children -> do
                 killFromRef zk fullChildrenThreadId children
 
-                infoM $ "Processors changed: " ++ show children
                 let expectedRegistrations = numProcessors topology + 1
+                infoM $ "Processors changed: (expected=" ++ show expectedRegistrations
+                        ++ ",got=" ++ (show $ length children) ++ ") "++ show children
 
                 if length children < expectedRegistrations
                     then do
