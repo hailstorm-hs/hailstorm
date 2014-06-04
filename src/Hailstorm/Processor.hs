@@ -42,13 +42,13 @@ data Bolt =
     Bolt { boltName :: String
          , boltParallelism :: Int
          , upstreamDeserializer :: String -> PayloadTuple
-         , downstreamSerializer :: PayloadTuple -> String
-         , tupleToStateConverter :: PayloadTuple -> BoltState
-         , stateSerializer :: BoltState -> String
-         , stateDeserializer :: String -> BoltState
+         , transformTupleFn :: PayloadTuple -> BoltState -> PayloadTuple
          , emptyState :: BoltState
          , mergeFn :: BoltState -> BoltState -> BoltState
-         , transformTupleFn :: PayloadTuple -> BoltState -> PayloadTuple
+         , tupleToStateConverter :: PayloadTuple -> BoltState
+         , downstreamSerializer :: PayloadTuple -> String
+         , stateSerializer :: BoltState -> String
+         , stateDeserializer :: String -> BoltState
          }
 
 data Sink =

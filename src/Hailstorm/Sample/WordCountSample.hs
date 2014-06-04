@@ -10,6 +10,7 @@ import Data.List
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
+import Debug.Trace
 import Hailstorm.Error
 import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.Processor
@@ -19,6 +20,9 @@ import qualified Data.Map as Map
 
 localServer :: String
 localServer = "127.0.0.1"
+
+forceDyn :: Typeable a => Dynamic -> a
+forceDyn = fromJust . fromDynamic
 
 data TypeableIntSum = TIS (Sum Int)
                       deriving (Eq, Typeable, Show, Read)
@@ -42,93 +46,95 @@ dynToWordCountTuple :: Dynamic -> (String, TypeableIntSum)
 dynToWordCountTuple d = flip fromMaybe (fromDynamic d) $
     throw $ InvalidTopologyError "Unexpected value: not a (word, count) tuple"
 
-dynToListTuple :: Dynamic -> [(String, TypeableIntSum)]
-dynToListTuple d = flip fromMaybe (fromDynamic d) $
-    throw $ InvalidTopologyError "Unexpected value: not a [(word, count)] tuple"
 
 dynToMMWrapper :: Dynamic -> MonoidMapWrapper String TypeableIntSum
 dynToMMWrapper d = flip fromMaybe (fromDynamic d) $
     throw $ InvalidTopologyError "Unexpected value: not a word-count) state map"
 
-tupleToState :: PayloadTuple -> BoltState
-tupleToState tup = let (key, val) = payloadTupleToWordCountTuple tup
-                   in MkBoltState $ toDyn $ MonoidMapWrapper (Map.singleton key val)
-
 payloadTupleToWordCountTuple :: PayloadTuple -> (String, TypeableIntSum)
 payloadTupleToWordCountTuple (MkPayloadTuple d) = dynToWordCountTuple d
 
-payloadTupleToListTuple :: PayloadTuple -> [(String, TypeableIntSum)]
-payloadTupleToListTuple (MkPayloadTuple d) = dynToListTuple d
-
 readTISPayloadTuple :: String -> PayloadTuple
 readTISPayloadTuple x = MkPayloadTuple $ toDyn (read x :: (String, TypeableIntSum))
-
-readListPayloadTuple :: String -> PayloadTuple
-readListPayloadTuple x = MkPayloadTuple $ toDyn (read x :: [(String, TypeableIntSum)])
-
-boltStateToInnerMap :: BoltState -> Map.Map String TypeableIntSum
-boltStateToInnerMap (MkBoltState d) = let (MonoidMapWrapper m') = dynToMMWrapper d
-                                      in m'
-
-readBoltState :: String -> BoltState
-readBoltState x = MkBoltState $ toDyn $
-    MonoidMapWrapper (read x :: Map.Map String TypeableIntSum)
-
-mergeStates :: BoltState -> BoltState -> BoltState
-mergeStates (MkBoltState dynM) (MkBoltState dynN) =
-    let m' = dynToMMWrapper dynM
-        n' = dynToMMWrapper dynN
-        mr = m' `mappend` n'
-    in MkBoltState $ toDyn mr
-
-lookupTupleInState :: PayloadTuple -> BoltState -> PayloadTuple
-lookupTupleInState tup (MkBoltState dynM) =
-    let MonoidMapWrapper m = dynToMMWrapper dynM
-        (k, _) = payloadTupleToWordCountTuple tup
-        v = Map.findWithDefault
-            (error $ "Could not find " ++ k ++ " in state " ++ show m) k m
-    in (MkPayloadTuple $ toDyn (k, v))
-
-outputBoltState :: PayloadTuple -> BoltState -> PayloadTuple
-outputBoltState _ (MkBoltState dynM) = 
-    let MonoidMapWrapper m = dynToMMWrapper dynM
-        sorted = sortBy (comparing $ snd) (Map.toList m)
-    in (MkPayloadTuple $ toDyn sorted)
 
 wordsSpout :: Spout
 wordsSpout = Spout
     { spoutName = "words"
     , spoutPartitions = ["all_words"]
-    , convertFn = \x -> MkPayloadTuple $ toDyn (C8.unpack x, TIS (Sum 1))
+    , convertFn = \x -> 
+        MkPayloadTuple $ toDyn (C8.unpack x, TIS (Sum 1))
     , spoutSerializer = show . payloadTupleToWordCountTuple
     }
 
 countBolt :: Bolt
 countBolt = Bolt
     { boltName = "count"
+
     , boltParallelism = 1
+
     , upstreamDeserializer = readTISPayloadTuple
+
+    , transformTupleFn = \tup (MkBoltState dynM) ->
+        let MonoidMapWrapper m = dynToMMWrapper dynM
+            (k, _) = payloadTupleToWordCountTuple tup
+            v = Map.findWithDefault
+                (error $ "Could not find " ++ k ++ " in state " ++ show m) k m
+        in (MkPayloadTuple $ toDyn (k, v))
+
+    , emptyState = 
+        MkBoltState $ toDyn (mempty :: MonoidMapWrapper String TypeableIntSum)
+
+    , mergeFn = \(MkBoltState dynM) (MkBoltState dynN) ->
+        let m' = dynToMMWrapper dynM
+            n' = dynToMMWrapper dynN
+            mr = m' `mappend` n'
+        in MkBoltState $ toDyn mr
+
+    , tupleToStateConverter = \tup ->
+        let (key, val) = payloadTupleToWordCountTuple tup
+        in MkBoltState $ toDyn $ MonoidMapWrapper (Map.singleton key val)
+
     , downstreamSerializer = show . payloadTupleToWordCountTuple
-    , stateDeserializer = readBoltState
-    , stateSerializer = show . boltStateToInnerMap
-    , tupleToStateConverter = tupleToState
-    , emptyState = MkBoltState $ toDyn (mempty :: MonoidMapWrapper String TypeableIntSum)
-    , mergeFn = mergeStates
-    , transformTupleFn = lookupTupleInState
+
+    , stateDeserializer = \x -> MkBoltState $ toDyn $
+        MonoidMapWrapper (read x :: Map.Map String TypeableIntSum)
+
+    , stateSerializer = \(MkBoltState d) -> show $
+        let (MonoidMapWrapper m') = dynToMMWrapper d in m'
     }
 
 sortBolt :: Bolt
 sortBolt = Bolt
     { boltName = "sort"
+
     , boltParallelism = 1
+
     , upstreamDeserializer = readTISPayloadTuple
-    , downstreamSerializer = show . payloadTupleToListTuple
-    , stateDeserializer = readBoltState
-    , stateSerializer = show . boltStateToInnerMap
-    , tupleToStateConverter = tupleToState
-    , emptyState = MkBoltState $ toDyn (mempty :: MonoidMapWrapper String TypeableIntSum)
-    , mergeFn = mergeStates
-    , transformTupleFn = outputBoltState
+
+    , transformTupleFn = \_ (MkBoltState stateDyn) -> 
+        let state = fromJust $ fromDynamic $ stateDyn :: Map.Map String Int
+            sorted = sortBy (comparing $ snd) (Map.toList state)
+        in (MkPayloadTuple $ toDyn sorted)
+
+    , emptyState = 
+        MkBoltState $ toDyn (Map.empty :: Map.Map String Int)
+
+    , mergeFn = \(MkBoltState map1Dyn) (MkBoltState map2Dyn) ->
+        let map1 = fromJust $ fromDynamic $ map1Dyn :: Map.Map String Int
+            map2 = fromJust $ fromDynamic $ map2Dyn :: Map.Map String Int
+        in MkBoltState $ toDyn $ Map.unionWith max map1 map2
+
+    , tupleToStateConverter = \tup ->
+        let (key, TIS (Sum i)) = payloadTupleToWordCountTuple tup
+        in MkBoltState $ toDyn $ Map.singleton key i
+
+    , downstreamSerializer = \(MkPayloadTuple d) -> 
+        show $ (forceDyn d :: [(String, Int)])
+
+    , stateDeserializer = \str ->
+        MkBoltState $ toDyn (read (trace "Deserializin'" str) :: Map.Map String Int)
+    , stateSerializer = \(MkBoltState mapDyn) -> 
+        show $ (forceDyn mapDyn :: Map.Map String Int)
     }
 
 outputSink :: Sink
@@ -136,9 +142,12 @@ outputSink = Sink
     { sinkName = "sink"
     , sinkParallelism = 1
     --, outputFn = \_ -> return ()
-    , outputFn = \x -> print (payloadTupleToListTuple x) 
-    , sinkDeserializer = readListPayloadTuple
+    , outputFn = \(MkPayloadTuple x) -> 
+        print (forceDyn x :: [(String, Int)]) 
+    , sinkDeserializer = \str -> 
+        MkPayloadTuple $ toDyn (read str:: [(String, Int)])
     }
+
 
 wordCountTopology :: HardcodedTopology
 wordCountTopology = HardcodedTopology
