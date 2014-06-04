@@ -72,7 +72,7 @@ initializeCluster opts = withConnection opts $ \zk -> do
         Right _ -> return ()
 
 
-deleteWatcherStartDelay :: Int 
+deleteWatcherStartDelay :: Int
 deleteWatcherStartDelay = 3 * 1000
 -- | Creates and registers a processor node in Zookeeper.
 registerProcessor :: ZKOptions
@@ -156,8 +156,12 @@ setProcessorState :: ZK.Zookeeper
                   -> ProcessorId
                   -> ProcessorState
                   -> IO (Either ZK.ZKError ZK.Stat)
-setProcessorState zk pid pState = ZK.set zk (zkProcessorNode pid)
-    (Just $ serializeZK pState) Nothing
+setProcessorState zk pid pState = do
+    r <- ZK.set zk (zkProcessorNode pid) (Just $ serializeZK pState) Nothing
+    case r of
+        Right _ -> infoM $ "Processor " ++ show pid ++ " state changed: " ++ show pState
+        _ -> return ()
+    return r
 
 -- | Gets state of processor from Zookeeper.
 getProcessorState :: ZK.Zookeeper

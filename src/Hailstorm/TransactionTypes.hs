@@ -7,7 +7,7 @@ module Hailstorm.TransactionTypes
 import Data.Dynamic
 
 data PayloadTuple = MkPayloadTuple Dynamic
-  deriving (Show)
+                    deriving (Show)
 
 data BoltState = MkBoltState Dynamic
-  deriving (Show)
+                 deriving (Show)

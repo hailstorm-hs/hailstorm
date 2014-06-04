@@ -10,6 +10,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.STM
 import Data.ByteString.Char8 ()
+import Data.Maybe
 import Data.IORef
 import Hailstorm.Clock
 import Hailstorm.Error
@@ -73,7 +74,7 @@ runDownstream opts dId@(dName, dInst) topology inputSource snapshotStore = do
             producer s >-> PC.toOutput pcOutput
 
     startState <- case pr of
-                      SinkNode _ -> return $ SinkRunning
+                      SinkNode _ -> return SinkRunning
                       BoltNode _ -> if not $ Map.null $ extractClockMap savedClk
                                         then return $ BoltLoaded savedClk
                                         else do
@@ -84,7 +85,6 @@ runDownstream opts dId@(dName, dInst) topology inputSource snapshotStore = do
 
     groundhogDay dId (runDownstream opts dId topology inputSource snapshotStore) $ do
         (pcOutput, pcInput, seal) <- PC.spawn' PC.Single
-
         serverRef <- newIORef (Nothing :: Maybe ThreadId)
 
         finally (registerProcessor opts dId startState $ \zk -> do
@@ -97,14 +97,12 @@ runDownstream opts dId@(dName, dInst) topology inputSource snapshotStore = do
 
     throw $ ZookeeperConnectionError $ "Unable to register downstream " ++ dName
 
-
 killRef :: IORef (Maybe ThreadId) -> IO ()
 killRef iref = do
     mtid <- readIORef iref
     case mtid of
         Just tid -> killThread tid
         Nothing -> return ()
-
 
 serveForkOS :: HostPreference
             -> ServiceName
@@ -133,7 +131,7 @@ socketProducer p s = do
     emitNextPayload h = do
         t <- lift $ hGetLine h
         yield $ deserializePayload t $ deserializer p
-        lift $ hPutStrLn h $ "OK"
+        lift $ hPutStrLn h "OK"
         emitNextPayload h
 
 -- | Builds a Pipe that receives a payload emitted from a handle and
@@ -174,16 +172,18 @@ boltPipe blt instNum zk mStateMVar state clk snapshotStore =
 
                 if canSnapshot desiredSnapClock newLWM lastClock
                     then do
-                        lift $ infoM $ "Perming snapshot at " ++ show desiredSnapClock
-                        let snappy = case desiredSnapClock of
-                              Just x -> x
-                              Nothing -> throw $ BadStateError $ 
-                                         "Expected desired snapshot clock to be non-empty"
+                        lift $ infoM $
+                            "Perming snapshot at " ++ show desiredSnapClock ++
+                                " for bolt " ++ show bId
+                        let snappy = fromMaybe
+                                (throw $ BadStateError
+                                    "Expected desired snapshot clock to be non-empty")
+                                desiredSnapClock
 
                         void <$> lift $ saveState blt instNum zk stateA
                              snappy snapshotStore
                         pipeLoop (stateA `mergeStates` stateB) (emptyState blt)
-                            True $ snappy
+                            True snappy
                     else pipeLoop stateA stateB True lastClock
 
         -- Determine next snapshot clock, if available.

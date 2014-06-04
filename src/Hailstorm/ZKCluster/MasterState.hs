@@ -57,7 +57,7 @@ setMasterState :: ZK.Zookeeper -> MasterState -> IO (Either ZK.ZKError ZK.Stat)
 setMasterState zk ms = do
     r <- ZK.set zk zkMasterStateNode (Just $ serializeZK ms) Nothing
     case r of
-        Right _ -> infoM $ "Master state set to " ++ show ms
+        Right _ -> infoM $ "Master state changed: " ++ show ms
         _ -> return ()
     return r
 
