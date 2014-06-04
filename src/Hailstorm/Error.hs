@@ -22,6 +22,7 @@ data HSError = UnknownWorkerException
              | RegistrationDeleted
              | HSErrorWrap HSError String
              | UnexpectedKafkaError
+             | DisconnectionError String
                deriving (Show, Typeable)
 instance Exception HSError
 

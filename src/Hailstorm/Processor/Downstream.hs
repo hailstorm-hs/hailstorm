@@ -83,7 +83,7 @@ runDownstream opts dId@(dName, dInst) topology inputSource snapshotStore = do
                                             return $ BoltLoaded startClk
                       _ -> throwNoDownstreamError
 
-    groundhogDay (runDownstream opts dId topology inputSource snapshotStore) $ do
+    groundhogDay dId (runDownstream opts dId topology inputSource snapshotStore) $ do
         (pcOutput, pcInput, seal) <- PC.spawn' PC.Single
 
         serverRef <- newIORef (Nothing :: Maybe ThreadId)

@@ -71,6 +71,9 @@ initializeCluster opts = withConnection opts $ \zk -> do
             "Could not create living processors node: " ++ show e
         Right _ -> return ()
 
+
+deleteWatcherStartDelay :: Int 
+deleteWatcherStartDelay = 3 * 1000
 -- | Creates and registers a processor node in Zookeeper.
 registerProcessor :: ZKOptions
                   -> ProcessorId
@@ -85,7 +88,7 @@ registerProcessor opts pid initialState action =
             Left e  -> errorM $
                 "Error while registering " ++ show pid ++ ": " ++ show e
             Right _ -> do
-                infoM $ "Registered: " ++ show pid
+                threadDelay deleteWatcherStartDelay
                 addDeletionWatcher zk pid
                 action zk
 
@@ -93,24 +96,29 @@ processorRestartDelay :: Int
 processorRestartDelay = 15 * 1000 * 1000
 
 -- | Catches registration deleted events, restarts process
-groundhogDay :: IO () -> IO () -> IO ()
-groundhogDay handler action =
-    catch action (\(_ :: SomeException) -> threadDelay processorRestartDelay >> handler)
+groundhogDay :: ProcessorId -> IO () -> IO () -> IO ()
+groundhogDay pid handler action =
+    catch action (\(e :: SomeException) -> do
+      infoM $ show pid ++ ": groundhog day caught " ++ show e
+      threadDelay processorRestartDelay >> handler)
 
 -- | Creates a watcher that throws to the master thread whenever
 -- the registration is deleted from Zookeeper by the negotiator
 addDeletionWatcher :: ZK.Zookeeper -> ProcessorId -> IO ()
-addDeletionWatcher zk pid = do
-    masterTid <- myThreadId
-    void <$> forkOS $ do
-        me <- ZK.get zk (zkProcessorNode pid) (Just $ watcher masterTid)
-        case me of
-            Left e -> doubleThrow masterTid (ZookeeperConnectionError $ show e)
-            Right _ -> return ()
+addDeletionWatcher zk pid = myThreadId >>= doIt
   where
-    watcher masterTid _ ZK.DeletedEvent _ _ =
+    doIt masterTid =
+      void <$> forkOS $ do
+          me <- ZK.get zk (zkProcessorNode pid) (Just $ watcher masterTid)
+          case me of
+              Left e -> do
+                infoM $ "Deletion watcher exception for " ++ show pid
+                throwTo masterTid (ZookeeperConnectionError $ show e)
+              Right _ -> return ()
+    watcher masterTid _ ZK.DeletedEvent _ _ = do
+        infoM $ show pid ++ " got reboot request"
         throwTo masterTid RegistrationDeleted
-    watcher _ _ _ _ _ = return ()
+    watcher masterTid _ _ _ _ = doIt masterTid
 
 
 -- | Delivers living processors change events to the callback. Uses the same

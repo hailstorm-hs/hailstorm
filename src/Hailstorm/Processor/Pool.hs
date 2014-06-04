@@ -1,9 +1,12 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Hailstorm.Processor.Pool
 ( downstreamPoolConsumer
 ) where
 
+import Control.Exception
 import Data.ByteString.Char8 ()
 import Data.Maybe
+import Hailstorm.Error
 import Hailstorm.Payload
 import Hailstorm.Processor
 import Hailstorm.Topology
@@ -12,6 +15,10 @@ import Network.Socket(socketToHandle)
 import Pipes
 import System.IO
 import qualified Data.Map as Map
+import qualified System.Log.Logger as L
+
+infoM :: String -> IO ()
+infoM = L.infoM "Hailstorm.Processor.Pool"
 
 type Host = String
 type Port = String
@@ -41,10 +48,16 @@ downstreamPoolConsumer pName topology = emitToNextLayer Map.empty
         payload <- await
         let sendAddresses = downstreamAddresses topology pName payload
             getHandle addressTuple = lift $ poolConnect addressTuple connPool
-            emitToHandle h = do
-                lift $ hPutStrLn h $ serializePayload payload $ serializer pr
-                _ <- lift $ hGetLine h -- Wait for ack 
-                return ()
+            emitToHandle h = lift $ 
+                catch (do
+                        hPutStrLn h $ serializePayload payload $ serializer pr
+                        _ <- hGetLine h -- Wait for ack 
+                        return ()
+                      )
+                      (\(ex :: IOException) -> do
+                          infoM $ "Caught exception in " ++ pName ++ ": " ++ show ex
+                          throw $ DisconnectionError $ "Disconnected in " ++ pName
+                      )
 
 
         newHandles <- mapM getHandle sendAddresses

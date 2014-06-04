@@ -37,10 +37,11 @@ runSpout zkOpts sp partition topology inputSource = do
     instNum <- partitionIndex inputSource partition
     let spoutId = (spoutName sp, instNum)
 
-    groundhogDay (runSpout zkOpts sp partition topology inputSource) $
+    groundhogDay spoutId (runSpout zkOpts sp partition topology inputSource) $
         registerProcessor zkOpts spoutId SpoutRunning $ \zk -> do
             masterStateMVar <- newEmptyMVar
-            tid <- forkOS $ pipeThread zk instNum masterStateMVar 0
+            mtid <- myThreadId
+            tid <- forkOS $ pipeThread mtid zk instNum masterStateMVar 0
             spoutRunnerIdRef <- newIORef tid
 
             watchMasterState zk $ \et -> case et of
@@ -56,7 +57,7 @@ runSpout zkOpts sp partition topology inputSource = do
                                                          ++ show partition ++ " isn't in the processor map "
                                                          ++ show pMap 
                                                          ++ " - did you switch input sources without clearing state?"
-                    newTid <- forkOS $ pipeThread zk instNum masterStateMVar newOffset
+                    newTid <- forkOS $ pipeThread mtid zk instNum masterStateMVar newOffset
                     infoM $ "Rewound thread to " ++ show (partition, newOffset)
                     writeIORef spoutRunnerIdRef newTid
 
@@ -65,11 +66,17 @@ runSpout zkOpts sp partition topology inputSource = do
     throw $ ZookeeperConnectionError $ "Unable to register spout " ++ show spoutId
   where
     signalState mVar ms = tryTakeMVar mVar >> putMVar mVar ms
-    pipeThread zk instNum stateMVar offset =
+    pipeThread masterTid zk instNum stateMVar offset =
       let downstream = downstreamPoolConsumer (spoutName sp) topology
           producer = partitionProducer inputSource partition offset
-      in runEffect $
-        producer >-> spoutStatePipe zk sp instNum partition offset stateMVar >-> downstream
+      in handleJust (\e -> if e /= ThreadKilled then Just (e) else Nothing) 
+                    (\e -> (infoM $ "Caught " ++ show e ++ " in spout " ++ show instNum) 
+                            >> doubleThrow masterTid e)
+                    (runEffect $
+                      producer >-> 
+                      spoutStatePipe zk sp instNum partition offset stateMVar >-> 
+                      downstream
+                    )
 
 spoutStatePipe :: ZK.Zookeeper
                -> Spout
