@@ -15,7 +15,7 @@ data Payload = Payload
     { payloadTuple :: PayloadTuple
     , payloadPosition :: (Partition, Offset)
     , payloadLowWaterMarkMap :: Map.Map ProcessorName Clock
-    }
+    } deriving (Show)
 
 serializePayload :: Payload
                  -> (PayloadTuple -> String)

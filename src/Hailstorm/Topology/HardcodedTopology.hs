@@ -4,6 +4,7 @@ module Hailstorm.Topology.HardcodedTopology
 , GroupingFn
 ) where
 
+import Debug.Trace
 import Data.Maybe
 import Hailstorm.Payload
 import Hailstorm.Processor
@@ -30,9 +31,9 @@ instance Topology HardcodedTopology where
                 show pName ++ " in topology " ++ show (Map.keys $ downstreamMap t))
                 pName (downstreamMap t)
             findTargetInstance groupFn par =
-                groupFn (payloadTuple payload) `mod` par
+                  abs $ groupFn (payloadTuple payload) `mod` par
             findAddress (downstreamName, groupFn) =
-                let downstream = lookupProcessorWithFailure pName t
+                let downstream = lookupProcessorWithFailure downstreamName t
                     queryId = (downstreamName, findTargetInstance groupFn
                                 (parallelism downstream))
                 in fromMaybe (error $ "Could not find " ++ show queryId ++
