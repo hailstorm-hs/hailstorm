@@ -52,7 +52,7 @@ runProcessors zkOpts topology inputSource snapshotStore pids = do
         forkOS $ runNegotiator zkOpts topology
 
     startProcessor pid@(pName, pInstance) = do
-        let pr = fromJust $ lookupProcessor pName topology
+        let pr = lookupProcessorWithFailure pName topology
         case pr of
             SpoutNode s ->  do
                 partition <- indexToPartition inputSource pInstance
@@ -90,7 +90,7 @@ localRunner zkOpts topology spName source snapshotStore = do
 
     spoutPartition <- liftM head (allPartitions source)
     infoM $ "Spout partition will be " ++ show spoutPartition
-    let sp' = fromJust $ lookupProcessor spName topology
+    let sp' = lookupProcessorWithFailure spName topology
     spoutTid <-
         case sp' of
             SpoutNode sp -> forkOS $ runSpout zkOpts sp spoutPartition topology source

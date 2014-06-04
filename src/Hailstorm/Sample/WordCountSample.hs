@@ -250,6 +250,7 @@ wordCountTopology = HardcodedTopology
       , (("count", 0), (localServer, "10001"))
       , (("count", 1), (localServer, "10004"))
       , (("topn", 0), (localServer, "10002"))
+      , (("topn", 1), (localServer, "10005"))
       , (("merge_sort", 0), (localServer, "10003"))
       ]
   }

@@ -6,6 +6,8 @@ import Control.Concurrent hiding (yield)
 import Control.Exception
 import Control.Monad
 import Data.IORef
+import Data.Maybe
+import Hailstorm.Clock
 import Hailstorm.Clock
 import Hailstorm.Error
 import Hailstorm.Processor
@@ -41,7 +43,7 @@ runNegotiator zkOpts topology = do
         clocks <- untilBoltsLoaded zk topology
         unless (allTheSame clocks) (doubleThrow masterThreadId
             (BadStartupError $ "Bolts started at different points " ++ show clocks))
-        
+
         forceSetMasterState zk $ SpoutsRewind (head clocks)
         _ <- untilSpoutsPaused zk topology
         flowLoop zk
@@ -128,7 +130,9 @@ untilStatesMatch :: (Processor p)
 untilStatesMatch infoString zk ps matcher = do
     stateMap <- forceEitherIO UnknownWorkerException $ getAllProcessorStates zk
     let pids = concatMap processorIds ps
-        pStates = map (\k -> Map.findWithDefault (error $ "Could not find state " ++ show k) k stateMap ) pids
+        pStates = map (\k -> fromMaybe
+            (error $ "Could not find state " ++ show k ++ " in states " ++ show (Map.keys stateMap)) $
+            Map.lookup k stateMap) pids
         matched = matcher pStates
 
     if length pStates == length matched

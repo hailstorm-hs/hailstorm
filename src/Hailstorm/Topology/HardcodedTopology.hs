@@ -26,20 +26,31 @@ instance Topology HardcodedTopology where
     sinks t  = [ pr | pr@(SinkNode _)  <- Map.elems (processorNodeMap t) ]
 
     downstreamAddresses t pName payload =
-        let downstreams = fromJust $ Map.lookup pName (downstreamMap t)
+        let downstreams = Map.findWithDefault (error $ "Could not find " ++
+                show pName ++ " in topology " ++ show (Map.keys $ downstreamMap t))
+                pName (downstreamMap t)
             findTargetInstance groupFn par =
                 groupFn (payloadTuple payload) `mod` par
             findAddress (downstreamName, groupFn) =
-                let downstream = fromJust $ lookupProcessor pName t
-                in fromJust $ Map.lookup
-                    (downstreamName, findTargetInstance groupFn
-                        (parallelism downstream)) (addresses t)
+                let downstream = lookupProcessorWithFailure pName t
+                    queryId = (downstreamName, findTargetInstance groupFn
+                                (parallelism downstream))
+                in fromMaybe (error $ "Could not find " ++ show queryId ++
+                    " in addresses " ++ show (Map.keys $ addresses t)) $
+                    Map.lookup queryId (addresses t)
         in map findAddress downstreams
 
     lookupProcessor pName t = Map.lookup pName (processorNodeMap t)
 
-    addressFor t (pName, processorNumber) = fromJust $
-        Map.lookup (pName, processorNumber) (addresses t)
+    lookupProcessorWithFailure pName t =
+        fromMaybe
+            (error $ "Could not find " ++ show pName ++
+                " in topology " ++ show (Map.keys $ processorNodeMap t))
+            (lookupProcessor pName t)
+
+    addressFor t pId = fromMaybe
+        (error $ "Could not find " ++ show pId ++ " in " ++ show (Map.keys $ addresses t)) $
+            Map.lookup pId (addresses t)
 
     numProcessors (HardcodedTopology pmap _ _) =
         Map.fold (\p l -> l + parallelism p) 0 pmap

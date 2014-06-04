@@ -45,9 +45,7 @@ runDownstream :: (Topology t, SnapshotStore s, InputSource i)
               -> s
               -> IO ()
 runDownstream opts dId@(dName, dInst) topology inputSource snapshotStore = do
-    let pr = case lookupProcessor dName topology of
-          Just x -> x
-          Nothing -> throw $ BadStateError $ "Unable to lookup " ++ dName ++ " in topology"
+    let pr = lookupProcessorWithFailure dName topology
 
     -- Restore snapshot, if available.
     (st', savedClk) <-

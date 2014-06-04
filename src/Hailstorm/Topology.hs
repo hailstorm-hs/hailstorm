@@ -19,6 +19,8 @@ class Topology t where
 
     lookupProcessor :: ProcessorName -> t -> Maybe ProcessorNode
 
+    lookupProcessorWithFailure :: ProcessorName -> t -> ProcessorNode
+
     downstreamAddresses :: t
                         -> ProcessorName
                         -> Payload
