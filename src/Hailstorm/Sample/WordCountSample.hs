@@ -1,4 +1,5 @@
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 module Hailstorm.Sample.WordCountSample
 ( wordCountTopology
@@ -18,12 +19,15 @@ import Hailstorm.TransactionTypes
 import Pipes
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map as Map
+import qualified Data.PSQueue as PS
 
 localServer :: String
 localServer = "127.0.0.1"
 
 forceDyn :: Typeable a => Dynamic -> a
 forceDyn = fromJust . fromDynamic
+
+deriving instance Typeable2 PS.PSQ
 
 data TypeableIntSum = TIS (Sum Int)
                       deriving (Eq, Typeable, Show, Read)
@@ -104,38 +108,58 @@ countBolt = Bolt
         let (MonoidMapWrapper m') = dynToMMWrapper d in m'
     }
 
-sortBolt :: Bolt
-sortBolt = Bolt
-    { boltName = "sort"
+
+
+mergePSTopN :: Int -> PS.PSQ String Int -> PS.PSQ String Int -> PS.PSQ String Int
+mergePSTopN n p1 p2 = 
+  let (lesser, greater) = if PS.size p1 < PS.size p2 then (p1,p2) else (p2, p1)
+      merged = foldr (\(k PS.:-> v) pq -> 
+                        PS.alter (maybeMax v) k pq
+                     ) greater (PS.toList lesser)
+  in purgeN n merged
+  where 
+    maybeMax a (Just b) = Just $ max a b
+    maybeMax a Nothing = Just $ a
+    purgeN np pq = if (PS.size pq) <= n || np <= 0 then pq
+                   else purgeN (np-1) (PS.deleteMin pq)
+
+
+amtToSelect :: Int
+amtToSelect = 3
+
+topNBolt :: Bolt
+topNBolt = Bolt
+    { boltName = "topn"
 
     , boltParallelism = 1
 
     , upstreamDeserializer = readTISPayloadTuple
 
     , transformTupleFn = \_ (MkBoltState stateDyn) -> 
-        let state = fromJust $ fromDynamic $ stateDyn :: Map.Map String Int
-            sorted = sortBy (comparing $ snd) (Map.toList state)
-        in (MkPayloadTuple $ toDyn sorted)
+        let state = fromJust $ fromDynamic $ stateDyn :: PS.PSQ String Int
+        in MkPayloadTuple $ toDyn $ map (\(k PS.:-> v) -> (k,v)) (PS.toList state)
 
     , emptyState = 
-        MkBoltState $ toDyn (Map.empty :: Map.Map String Int)
+        MkBoltState $ toDyn (PS.empty :: PS.PSQ String Int)
 
-    , mergeFn = \(MkBoltState map1Dyn) (MkBoltState map2Dyn) ->
-        let map1 = fromJust $ fromDynamic $ map1Dyn :: Map.Map String Int
-            map2 = fromJust $ fromDynamic $ map2Dyn :: Map.Map String Int
-        in MkBoltState $ toDyn $ Map.unionWith max map1 map2
+    , mergeFn = \(MkBoltState ps1Dyn) (MkBoltState ps2Dyn) ->
+        let ps1 = fromJust $ fromDynamic $ ps1Dyn :: PS.PSQ String Int
+            ps2 = fromJust $ fromDynamic $ ps2Dyn :: PS.PSQ String Int
+        in MkBoltState $ toDyn $ mergePSTopN amtToSelect ps1 ps2
 
     , tupleToStateConverter = \tup ->
         let (key, TIS (Sum i)) = payloadTupleToWordCountTuple tup
-        in MkBoltState $ toDyn $ Map.singleton key i
+        in MkBoltState $ toDyn $ PS.singleton key i
 
     , downstreamSerializer = \(MkPayloadTuple d) -> 
         show $ (forceDyn d :: [(String, Int)])
 
     , stateDeserializer = \str ->
-        MkBoltState $ toDyn (read str :: Map.Map String Int)
-    , stateSerializer = \(MkBoltState mapDyn) -> 
-        show $ (forceDyn mapDyn :: Map.Map String Int)
+        let pq = PS.fromList $ map (\(k,v) -> k PS.:-> v) $ (read str :: [(String, Int)])
+        in MkBoltState $ toDyn $ pq
+
+    , stateSerializer = \(MkBoltState psDyn) -> 
+        show $ map (\(k PS.:-> v) -> (k,v)) $ PS.toList $ (forceDyn psDyn :: PS.PSQ String Int)
     }
 
 printSorted :: Int -> Consumer PayloadTuple IO ()
@@ -162,19 +186,19 @@ wordCountTopology = HardcodedTopology
       processorNodeMap = mkProcessorMap
       [ SpoutNode wordsSpout
       , BoltNode countBolt
-      , BoltNode sortBolt
+      , BoltNode topNBolt
       , SinkNode outputSink
       ]
       ,
       downstreamMap = Map.fromList
       [ ("words", [("count", const 0)]) -- TODO: implement grouping function
-      , ("count", [("sort", const 0)]) -- TODO: implement grouping function
-      , ("sort", [("sink", const 0)]) -- TODO: implement grouping function
+      , ("count", [("topn", const 0)]) -- TODO: implement grouping function
+      , ("topn", [("sink", const 0)]) -- TODO: implement grouping function
       ]
       ,
       addresses = Map.fromList
       [ (("sink", 0), (localServer, "10000"))
       , (("count", 0), (localServer, "10001"))
-      , (("sort", 0), (localServer, "10002"))
+      , (("topn", 0), (localServer, "10002"))
       ]
   }
