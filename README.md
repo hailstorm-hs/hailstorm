@@ -55,7 +55,7 @@ details.
 
 Hailstorm uses
 [Haskakafka](https://github.com/cosbynator/haskakafka), the Haskell bindings
-written by our very own [@tdimson](http://kafka.apache.org/). Haskakfka, in
+written by our very own [@cosbynator](https://github.com/cosbynator/). Haskakfka, in
 turn, depends on `librdkafka` (see the Haskakafka project page for installation
 instructions).
 
