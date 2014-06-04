@@ -63,6 +63,7 @@ library
    , haskakafka >= 0.1.0.7
    , stm
    , PSQueue
+   , hashable
   default-language:    Haskell2010
   ghc-options: -Wall -threaded
 
@@ -89,5 +90,6 @@ executable hailstorm
    , haskakafka >= 0.1.0.7
    , stm
    , PSQueue
+   , hashable
   default-language: Haskell2010
   ghc-options: -Wall -threaded

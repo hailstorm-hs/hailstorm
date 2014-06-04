@@ -8,6 +8,7 @@ module Hailstorm.Sample.WordCountSample
 import Control.Exception
 import Control.Monad
 import Data.Dynamic
+import Data.Hashable
 import Data.List
 import Data.Maybe
 import Data.Monoid
@@ -233,10 +234,12 @@ wordCountTopology = HardcodedTopology
       ]
       ,
       downstreamMap = Map.fromList
-      [ ("words", [("count", const 0)]) -- TODO: implement grouping function
-      , ("count", [("topn", const 0)]) -- TODO: implement grouping function
-      , ("topn", [("merge_sort", const 0)]) -- TODO: implement grouping function
-      , ("merge_sort", [("sink", const 0)]) -- TODO: implement grouping function
+      [ ("words", [("count", \(MkPayloadTuple dyn) -> 
+                      hash $ fst $ (forceDyn dyn :: (String, TypeableIntSum)))])
+      , ("count", [("topn", \(MkPayloadTuple dyn) ->
+                      hash $ fst $ (forceDyn dyn :: (String, TypeableIntSum)))])
+      , ("topn", [("merge_sort", const 0)]) 
+      , ("merge_sort", [("sink", const 0)])
       ]
       ,
       addresses = Map.fromList
