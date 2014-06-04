@@ -31,6 +31,7 @@ import System.IO
 import qualified Data.Map.Strict as Map
 import qualified Database.Zookeeper as ZK
 import qualified Pipes.Concurrent as PC
+import qualified Pipes.Prelude as P
 import qualified Network.Socket as NS
 import qualified System.Log.Logger as L
 
@@ -66,7 +67,8 @@ runDownstream opts dId@(dName, dInst) topology inputSource snapshotStore = do
                     in boltPipe b dInst zk mStateMVar savedState savedClk
                         snapshotStore >->
                         downstreamPoolConsumer dName topology
-                SinkNode k -> sinkConsumer k
+
+                SinkNode k -> P.map payloadTuple >-> outputConsumer k
                 _ -> throwNoDownstreamError
         processSocket s pcOutput = runEffect $
             producer s >-> PC.toOutput pcOutput
@@ -219,10 +221,3 @@ saveState blt instNum zk bState clk snapshotStore = forkOS $ do
     let pId = (boltName blt, instNum)
     saveSnapshot snapshotStore pId bState (stateSerializer blt) clk
     forceSetProcessorState zk pId (BoltSaved clk)
-
--- | Builds a Consumer that receives a payload emitted from a handle and
--- performs the sink operation defined in the given user formula.
-sinkConsumer :: Sink -> Consumer Payload IO ()
-sinkConsumer snk = forever $ do
-    payload <- await
-    lift $ outputFn snk $ payloadTuple payload

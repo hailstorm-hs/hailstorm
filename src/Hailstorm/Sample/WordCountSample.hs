@@ -5,16 +5,17 @@ module Hailstorm.Sample.WordCountSample
 ) where
 
 import Control.Exception
+import Control.Monad
 import Data.Dynamic
 import Data.List
 import Data.Maybe
 import Data.Monoid
 import Data.Ord
-import Debug.Trace
 import Hailstorm.Error
 import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.Processor
 import Hailstorm.TransactionTypes
+import Pipes
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map as Map
 
@@ -132,18 +133,24 @@ sortBolt = Bolt
         show $ (forceDyn d :: [(String, Int)])
 
     , stateDeserializer = \str ->
-        MkBoltState $ toDyn (read (trace "Deserializin'" str) :: Map.Map String Int)
+        MkBoltState $ toDyn (read str :: Map.Map String Int)
     , stateSerializer = \(MkBoltState mapDyn) -> 
         show $ (forceDyn mapDyn :: Map.Map String Int)
     }
+
+printSorted :: Int -> Consumer PayloadTuple IO ()
+printSorted cnt = do
+  (MkPayloadTuple x) <- await
+  lift $ when (cnt `mod` 2000 == 0) $
+          print (forceDyn x :: [(String, Int)]) 
+  printSorted (cnt + 1)
 
 outputSink :: Sink
 outputSink = Sink
     { sinkName = "sink"
     , sinkParallelism = 1
+    , outputConsumer = printSorted 0
     --, outputFn = \_ -> return ()
-    , outputFn = \(MkPayloadTuple x) -> 
-        print (forceDyn x :: [(String, Int)]) 
     , sinkDeserializer = \str -> 
         MkPayloadTuple $ toDyn (read str:: [(String, Int)])
     }

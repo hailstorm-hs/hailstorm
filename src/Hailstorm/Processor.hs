@@ -15,6 +15,7 @@ import Control.Exception
 import Hailstorm.Clock
 import Hailstorm.Error
 import Hailstorm.TransactionTypes
+import Pipes
 import qualified Data.ByteString as BS
 
 type ProcessorName = String
@@ -54,7 +55,7 @@ data Bolt =
 data Sink =
     Sink { sinkName :: String
          , sinkParallelism :: Int
-         , outputFn :: PayloadTuple -> IO ()
+         , outputConsumer :: Consumer PayloadTuple IO ()
          , sinkDeserializer :: String -> PayloadTuple
          }
 
