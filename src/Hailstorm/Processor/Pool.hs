@@ -5,7 +5,6 @@ module Hailstorm.Processor.Pool
 
 import Control.Exception
 import Data.ByteString.Char8 ()
-import Data.Maybe
 import Hailstorm.Error
 import Hailstorm.Payload
 import Hailstorm.Processor
