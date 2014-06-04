@@ -139,5 +139,5 @@ untilStatesMatch infoString zk ps matcher = do
     if length pStates == length matched
         then return matched
         else do
-            infoM $ infoString ++ show pStates
+            infoM $ infoString ++ (show $ zip pids pStates)
             zkThrottle >> untilStatesMatch infoString zk ps matcher

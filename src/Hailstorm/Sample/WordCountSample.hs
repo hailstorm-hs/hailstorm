@@ -219,7 +219,6 @@ outputSink = Sink
     { sinkName = "sink"
     , sinkParallelism = 1
     , outputConsumer = printSorted 0
-    --, outputFn = \_ -> return ()
     , sinkDeserializer = \str -> 
         MkPayloadTuple $ toDyn (read str:: [(String, Int)])
     }

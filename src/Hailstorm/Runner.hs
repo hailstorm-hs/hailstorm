@@ -1,9 +1,11 @@
 module Hailstorm.Runner (runProcessors, localRunner) where
 
 import Control.Concurrent
+import Control.Exception
 import Control.Monad
 import Data.Maybe
 import Hailstorm.Concurrency
+import Hailstorm.Error
 import Hailstorm.InputSource
 import Hailstorm.Logging
 import Hailstorm.Negotiator
@@ -94,7 +96,7 @@ localRunner zkOpts topology spName source snapshotStore = do
     spoutTid <-
         case sp' of
             SpoutNode sp -> forkOS $ runSpout zkOpts sp spoutPartition topology source
-            _ -> error $ spName ++ " is not a spout"
+            _ -> throw $ InvalidTopologyError $ spName ++ " is not a spout"
 
     let baseThreads = [(negotiatorTid, "Negotiator"), (spoutTid, "Spout")]
         consumerThreads = map (\tid -> (tid, show tid)) downstreamTids
