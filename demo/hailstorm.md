@@ -8,7 +8,7 @@ template: inverse
 
 # Hailstorm
 
-## A streaming processor based on exactly-once semantics
+## Distributed stream processing with exactly-once semantics
 
 Thomas Dimson & Milind Ganjoo
 
@@ -19,8 +19,10 @@ layout: false
 # Outline
 
 1. Introduction
-2. Deep-dive
-3. ...
+2. Background
+3. Architecture
+4. Topologies
+5. Demo
 
 ---
 
