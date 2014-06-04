@@ -5,8 +5,9 @@ module Hailstorm.InputSource
 , indexToPartition
 ) where
 
-import Data.Maybe
+import Control.Exception
 import Data.List hiding (partition)
+import Hailstorm.Error
 import Hailstorm.Clock
 import Pipes
 import qualified Data.ByteString as BS
@@ -20,7 +21,10 @@ class InputSource s where
 
 partitionIndex :: InputSource s => s -> Partition -> IO Int
 partitionIndex s p = allPartitions s >>=
-    \ps -> return $ fromJust $ elemIndex p ps
+    \ps -> return $ case elemIndex p ps of 
+              Just x -> x
+              Nothing -> throw $ BadStateError $ 
+                         "Unable to find partition index in " ++ show ps
 
 indexToPartition :: InputSource s => s -> Int -> IO (Partition)
 indexToPartition s i = allPartitions s >>= return . (!! i)
