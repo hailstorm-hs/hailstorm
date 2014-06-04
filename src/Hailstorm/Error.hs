@@ -13,6 +13,7 @@ import Data.Typeable
 import System.Log.Logger
 
 data HSError = UnknownWorkerException
+             | BadStateError String
              | UnexpectedZookeeperError
              | BadStartupError String
              | BadClusterStateError String

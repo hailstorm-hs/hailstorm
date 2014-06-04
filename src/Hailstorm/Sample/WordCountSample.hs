@@ -79,7 +79,7 @@ countBolt :: Bolt
 countBolt = Bolt
     { boltName = "count"
 
-    , boltParallelism = 1
+    , boltParallelism = 2
 
     , upstreamDeserializer = readTISPayloadTuple
 
@@ -248,6 +248,7 @@ wordCountTopology = HardcodedTopology
       addresses = Map.fromList
       [ (("sink", 0), (localServer, "10000"))
       , (("count", 0), (localServer, "10001"))
+      , (("count", 1), (localServer, "10004"))
       , (("topn", 0), (localServer, "10002"))
       , (("merge_sort", 0), (localServer, "10003"))
       ]

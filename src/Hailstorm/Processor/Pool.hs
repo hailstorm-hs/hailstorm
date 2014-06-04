@@ -64,4 +64,6 @@ downstreamPoolConsumer pName topology = emitToNextLayer Map.empty
         mapM_ emitToHandle newHandles
         let newPool = Map.fromList $ zip sendAddresses newHandles
         emitToNextLayer $ Map.union newPool connPool
-    pr = fromJust $ lookupProcessor pName topology
+    pr = case lookupProcessor pName topology of
+         Just x -> x
+         Nothing -> throw $ BadStateError $ "Unable to find " ++ pName ++ " in topology"
