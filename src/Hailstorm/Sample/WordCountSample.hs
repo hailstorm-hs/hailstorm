@@ -162,6 +162,47 @@ topNBolt = Bolt
         show $ map (\(k PS.:-> v) -> (k,v)) $ PS.toList $ (forceDyn psDyn :: PS.PSQ String Int)
     }
 
+outputAmt :: Int
+outputAmt = 2
+
+mergeSortBolt:: Bolt
+mergeSortBolt = Bolt
+    { boltName = "merge_sort"
+
+    , boltParallelism = 1
+
+    , upstreamDeserializer = \str ->
+        MkPayloadTuple $ toDyn (read str :: [(String, Int)])
+
+    , transformTupleFn = \_ (MkBoltState stateDyn) -> 
+        let state = fromJust $ fromDynamic $ stateDyn :: PS.PSQ String Int
+        in MkPayloadTuple $ toDyn $ sortBy (flip $ comparing $ snd) $
+              map (\(k PS.:-> v) -> (k,v)) (PS.toList state)
+
+    , emptyState = 
+        MkBoltState $ toDyn (PS.empty :: PS.PSQ String Int)
+
+    , mergeFn = \(MkBoltState ps1Dyn) (MkBoltState ps2Dyn) ->
+        let ps1 = fromJust $ fromDynamic $ ps1Dyn :: PS.PSQ String Int
+            ps2 = fromJust $ fromDynamic $ ps2Dyn :: PS.PSQ String Int
+        in MkBoltState $ toDyn $ mergePSTopN outputAmt ps1 ps2
+
+    , tupleToStateConverter = \(MkPayloadTuple tup) ->
+        let ls = map (\(k,v) -> k PS.:-> v) (forceDyn tup :: [(String, Int)])
+        in MkBoltState $ toDyn $ PS.fromList ls
+
+    , downstreamSerializer = \(MkPayloadTuple d) -> 
+        show $ (forceDyn d :: [(String, Int)])
+
+    , stateDeserializer = \str ->
+        let pq = PS.fromList $ map (\(k,v) -> k PS.:-> v) $ (read str :: [(String, Int)])
+        in MkBoltState $ toDyn $ pq
+
+    , stateSerializer = \(MkBoltState psDyn) -> 
+        show $ map (\(k PS.:-> v) -> (k,v)) $ PS.toList $ (forceDyn psDyn :: PS.PSQ String Int)
+    }
+
+
 printSorted :: Int -> Consumer PayloadTuple IO ()
 printSorted cnt = do
   (MkPayloadTuple x) <- await
@@ -187,18 +228,21 @@ wordCountTopology = HardcodedTopology
       [ SpoutNode wordsSpout
       , BoltNode countBolt
       , BoltNode topNBolt
+      , BoltNode mergeSortBolt
       , SinkNode outputSink
       ]
       ,
       downstreamMap = Map.fromList
       [ ("words", [("count", const 0)]) -- TODO: implement grouping function
       , ("count", [("topn", const 0)]) -- TODO: implement grouping function
-      , ("topn", [("sink", const 0)]) -- TODO: implement grouping function
+      , ("topn", [("merge_sort", const 0)]) -- TODO: implement grouping function
+      , ("merge_sort", [("sink", const 0)]) -- TODO: implement grouping function
       ]
       ,
       addresses = Map.fromList
       [ (("sink", 0), (localServer, "10000"))
       , (("count", 0), (localServer, "10001"))
       , (("topn", 0), (localServer, "10002"))
+      , (("merge_sort", 0), (localServer, "10003"))
       ]
   }
