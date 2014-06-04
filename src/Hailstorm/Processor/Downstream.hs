@@ -11,7 +11,6 @@ import Control.Monad
 import Control.Monad.STM
 import Data.ByteString.Char8 ()
 import Data.IORef
-import Data.Maybe
 import Hailstorm.Clock
 import Hailstorm.Error
 import Hailstorm.Payload
@@ -178,10 +177,15 @@ boltPipe blt instNum zk mStateMVar state clk snapshotStore =
                 if canSnapshot desiredSnapClock newLWM lastClock
                     then do
                         lift $ infoM $ "Perming snapshot at " ++ show desiredSnapClock
+                        let snappy = case desiredSnapClock of
+                              Just x -> x
+                              Nothing -> throw $ BadStateError $ 
+                                         "Expected desired snapshot clock to be non-empty"
+
                         void <$> lift $ saveState blt instNum zk stateA
-                            (fromJust desiredSnapClock) snapshotStore
+                             snappy snapshotStore
                         pipeLoop (stateA `mergeStates` stateB) (emptyState blt)
-                            True $ fromJust desiredSnapClock
+                            True $ snappy
                     else pipeLoop stateA stateB True lastClock
 
         -- Determine next snapshot clock, if available.
