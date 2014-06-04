@@ -26,7 +26,10 @@ localServer :: String
 localServer = "127.0.0.1"
 
 forceDyn :: Typeable a => Dynamic -> a
-forceDyn = fromJust . fromDynamic
+forceDyn x = case fromDynamic x of 
+  Just y -> y
+  Nothing -> throw $ InvalidTopologyError $ 
+             "Word count sample forced dynamic to bad type: " ++ show x
 
 deriving instance Typeable2 PS.PSQ
 
@@ -137,15 +140,15 @@ topNBolt = Bolt
     , upstreamDeserializer = readTISPayloadTuple
 
     , transformTupleFn = \_ (MkBoltState stateDyn) -> 
-        let state = fromJust $ fromDynamic $ stateDyn :: PS.PSQ String Int
+        let state = forceDyn $ stateDyn :: PS.PSQ String Int
         in MkPayloadTuple $ toDyn $ map (\(k PS.:-> v) -> (k,v)) (PS.toList state)
 
     , emptyState = 
         MkBoltState $ toDyn (PS.empty :: PS.PSQ String Int)
 
     , mergeFn = \(MkBoltState ps1Dyn) (MkBoltState ps2Dyn) ->
-        let ps1 = fromJust $ fromDynamic $ ps1Dyn :: PS.PSQ String Int
-            ps2 = fromJust $ fromDynamic $ ps2Dyn :: PS.PSQ String Int
+        let ps1 = forceDyn $ ps1Dyn :: PS.PSQ String Int
+            ps2 = forceDyn $ ps2Dyn :: PS.PSQ String Int
         in MkBoltState $ toDyn $ mergePSTopN amtToSelect ps1 ps2
 
     , tupleToStateConverter = \tup ->
@@ -176,7 +179,7 @@ mergeSortBolt = Bolt
         MkPayloadTuple $ toDyn (read str :: [(String, Int)])
 
     , transformTupleFn = \_ (MkBoltState stateDyn) -> 
-        let state = fromJust $ fromDynamic $ stateDyn :: PS.PSQ String Int
+        let state = forceDyn $ stateDyn :: PS.PSQ String Int
         in MkPayloadTuple $ toDyn $ sortBy (flip $ comparing $ snd) $
               map (\(k PS.:-> v) -> (k,v)) (PS.toList state)
 
@@ -184,8 +187,8 @@ mergeSortBolt = Bolt
         MkBoltState $ toDyn (PS.empty :: PS.PSQ String Int)
 
     , mergeFn = \(MkBoltState ps1Dyn) (MkBoltState ps2Dyn) ->
-        let ps1 = fromJust $ fromDynamic $ ps1Dyn :: PS.PSQ String Int
-            ps2 = fromJust $ fromDynamic $ ps2Dyn :: PS.PSQ String Int
+        let ps1 = forceDyn $ ps1Dyn :: PS.PSQ String Int
+            ps2 = forceDyn $ ps2Dyn :: PS.PSQ String Int
         in MkBoltState $ toDyn $ mergePSTopN outputAmt ps1 ps2
 
     , tupleToStateConverter = \(MkPayloadTuple tup) ->
