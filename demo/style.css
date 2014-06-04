@@ -22,6 +22,9 @@ h1, h2, h3 {
   font-size: 0.8em;
 }
 .red { color: #fa0000; }
+
+.medium { font-size: 1.4em; }
+    
 .large { font-size: 2em; }
 a {
   color: rgb(249, 38, 114);
@@ -47,4 +50,8 @@ a {
 .inverse h1, .inverse h2 {
   color: #f3f3f3;
   line-height: 0.8em;
+}
+
+.full-width-image img {
+  width: 90%;
 }

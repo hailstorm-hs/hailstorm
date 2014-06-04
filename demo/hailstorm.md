@@ -16,6 +16,16 @@ Thomas Dimson & Milind Ganjoo
 
 layout: false
 
+# A Guessing Game
+
+.center[.full-width-image[![Alt text](in_common.png)]]
+
+.center.medium[ What do these have in common?]
+
+---
+
+layout: false
+
 # Outline
 
 1. Introduction
