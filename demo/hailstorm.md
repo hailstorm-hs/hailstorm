@@ -228,16 +228,50 @@ layout: true
 # Architecture
 
 ---
+## Running Example
 
-## Clock
+Image goes here
+
+---
+## Exactly Once / Vector Clocks
+
+* Hailstorm operates with exactly once semantics without fine-grained
+  locking or synchronization
+
+* To do this, inner computation is restricted to _commutative_ _monoids_
+
+* Time is represented with a vector clock, each component being a Kafka
+  offset
+
+* Periodically, the bolts snapshot their state along with the vector clock. On
+  failure, we restore snapshots to each bolt and rewind the spouts to the snapshot clock. 
+  
+.footnote[Details hashed out in the coming slides]
 
 ---
 
-## Desired snapshot clock
+## Spouts
+
+* Spouts are responsible for getting data into the Hailstorm system
+
+* Each spout is locked to a single Kafka partition, performs data
+  deserialization and forwards tuples along with their offsets to downstreams
+
+* Downstreams partition the space (''bieber'' always goes to the same downstream,
+  so no individual processor gets overloaded)
+
+* Because Kafka retains data indefinitely, the spouts are able to rewind
+  to a previous time. 
+
+* After Hailstorm initialization, spouts are rewound to the last good snapshot
+  of the system.
+
+* Users of Hailstorm specify a pure deserialization function and all
+  impure operations are handled internally.
 
 ---
 
-## Bolt operation
+## Bolts
 
 * Hailstorm &lt;3 monoids: represent bolt state using a _commutative_ monoid
 
@@ -283,6 +317,22 @@ _But when can we guarantee that A will no longer change?_
   * Bolt C's LWM = desired snapshot clock: .green[**save**]
   * Bolt D's LWM &lt;= desired snapshot clock: .red[**wait**]
   * Bolt E's LWM = min(LWM C, LWM D) &lt;= desired snapshot clock: .red[**wait**]
+
+---
+
+## Sinks
+
+* Sinks are the gateway to the real world - after all computation is finished,
+  they perform user-specified actions
+
+* They receive tuples from upstream bolts are are able to perform any kind
+  of computation they want on the tuples
+
+* Unlike bolts, they are not snapshotted and non-idempotent operations may result
+  in real-world issues.
+
+* Sinks are the only part of the Hailstorm system where a user is allowed to 
+  execute impure code.
 
 ---
 
