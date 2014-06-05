@@ -293,3 +293,37 @@ template: inverse
 background-image: url(images/storm_clouds_4.jpg)
 
 # Demo
+
+---
+
+layout: true
+
+# Sayonara
+
+---
+
+## Next Steps
+
+* More flexibility in specifying topologyies
+
+  * Currently have to specify IP address / port
+
+* Seperate topology logic from groups of machine
+
+  * Like hadoop, it would be nice to separate the *job* from *hailstorm*
+  * Could also support client bolt specification in Zookeeper
+
+* More robustness
+
+  * Sensitive to Zookeeper timings
+
+---
+
+template: inverse
+
+background-image: url(images/storm_clouds_5.jpg)
+
+# Hailstorm
+## https://github.com/hailstorm-hs/hailstorm
+## https://github.com/cosbynator/haskakafka
+## @mganjoo @cosbynator
