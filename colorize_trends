@@ -1,0 +1,16 @@
+#!/usr/bin/env ruby
+
+require 'colored'
+
+file_name = ARGV[0].to_s
+
+if File.exists?(file_name)
+  File.open(file_name) do |f|
+    puts "Trending now".red
+    trends = f.map { |line| line.split(',') }
+    for hashtag, count in trends
+      printf("%4d %s\n", count, hashtag.green)
+    end
+  end
+end
+
