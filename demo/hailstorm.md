@@ -144,16 +144,16 @@ instance Storable RdKafkaMessageT where
     alignment _ = {#alignof rd_kafka_message_t#}
     sizeOf _ = {#sizeof rd_kafka_message_t#}
     peek p = RdKafkaMessageT
-        <$> liftM cIntToEnum  ({#get rd_kafka_message_t->err #} p)
         <*> liftM fromIntegral ({#get rd_kafka_message_t->partition #} p)
         <*> liftM fromIntegral ({#get rd_kafka_message_t->len #} p)
         <*> liftM fromIntegral ({#get rd_kafka_message_t->offset#} p)
         <*> liftM castPtr ({#get rd_kafka_message_t->payload#} p)
     poke p x = do
-      {#set rd_kafka_message_t.err#} p (enumToCInt $ err'RdKafkaMessageT x)
-      {#set rd_kafka_message_t.partition#} p (fromIntegral $ partition'RdKafkaMessageT x)
+      {#set rd_kafka_message_t.partition#} p 
+          (fromIntegral $ partition'RdKafkaMessageT x)
       {#set rd_kafka_message_t.len#} p (fromIntegral $ len'RdKafkaMessageT x)
-      {#set rd_kafka_message_t.offset#} p (fromIntegral $ offset'RdKafkaMessageT x)
+      {#set rd_kafka_message_t.offset#} p 
+          (fromIntegral $ offset'RdKafkaMessageT x)
       {#set rd_kafka_message_t.payload#} p (castPtr $ payload'RdKafkaMessageT x)
 ```
 
