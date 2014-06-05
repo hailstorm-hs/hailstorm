@@ -199,8 +199,6 @@ instance Storable RdKafkaMessageT where
 
 ---
 
-layout: true
-
 .float-right-slide-widget[
 ![Right-aligned image](images/nathanmarz.jpg)
 # Background
