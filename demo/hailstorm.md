@@ -176,6 +176,28 @@ layout: false
 
 ---
 
+# Bolt operation
+
+* Hailstorm &lt;3 monoids: represent bolt state using a monoid
+
+* Each incoming tuple is `mappend`-ed to state
+
+* Whenever negotiator publishes a new `desiredSnapshotClock`:
+    1. Make two states, A and B (A = current state, B = `mempty`)
+    2. For each incoming tuple:
+      1. If tuple offset &lt;= (`desiredSnapshotClock ! partition`), merge into A
+      2. Otherwise, merge into B
+
+* When it is time to save a snapshot, A will no longer change. Then:
+    1. Fork thread to save A
+    2. Revert to one state: A `mappend` B
+
+--
+
+_But when is it time to save a snapshot?_
+
+---
+
 # Low water mark (LWM)
 
 * Continuing with the plumbing analogies...
@@ -193,7 +215,7 @@ layout: false
 
 ---
 
-# Using LWM: saving snapshots
+# Deciding when to save a snapshot
 
 ![Architecture diagram showing low water marks for each bolt](images/lwm_snapshot.png)
 
