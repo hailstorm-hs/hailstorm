@@ -166,7 +166,7 @@ layout: false
 
 * :( No up-to-date Kafka bindings for Haskell
 
-* :) empowered C FFI-ers, write our own and name it [Haskakafka](https://github.com/cosbynator/haskakafka)
+* :) empowered C FFI-ers, write our own and name it [Haskakafka](http://hackage.haskell.org/package/haskakafka-0.2.0.0)
 
 --
 
@@ -433,5 +433,5 @@ background-image: url(images/storm_clouds_5.jpg)
 
 # Hailstorm
 ## https://github.com/hailstorm-hs/hailstorm
-## https://github.com/cosbynator/haskakafka
+## http://hackage.haskell.org/package/haskakafka-0.2.0.0
 ## @mganjoo @cosbynator
