@@ -28,7 +28,7 @@ group :build do
   end
 end
 
-group :build, :demo do
+group :demo do
   guard :shell do
     watch(/\.store\/.*/) do |m|
       puts "Snapshot changed: #{m[0]}".cyan
