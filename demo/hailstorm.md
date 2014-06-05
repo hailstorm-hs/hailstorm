@@ -19,7 +19,7 @@ class: center
 
 # A Guessing Game
 
-.full-width-image[![Alt text](in_common.png)]
+.full-width-image[![Pictures of three different men](images/in_common.png)]
 
 .medium[What do these have in common?]
 
@@ -128,6 +128,16 @@ layout: true
 layout: false
 
 # Architecture
+
+---
+
+# When does a bolt save its state?
+
+![Architecture diagram showing low water marks for each bolt](images/low_water_mark.png)
+
+- Bolt C's LWM matches desired snapshot clock: .green[**save**]
+- Bolt D's LWM &lt; desired snapshot clock: .red[**wait**]
+- Bolt E's LWM = min(LWM C, LWM D) &lt; desired snapshot clock: .red[**wait**]
 
 ---
 

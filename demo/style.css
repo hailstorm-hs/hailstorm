@@ -22,9 +22,10 @@ h1, h2, h3 {
   font-size: 0.8em;
 }
 .red { color: #fa0000; }
+.green { color: #006400; }
 
 .medium { font-size: 1.4em; }
-    
+
 .large { font-size: 2em; }
 a {
   color: rgb(249, 38, 114);
