@@ -288,6 +288,50 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
+## The *Negotiator*
+
+* Negotiator is responsible for co-ordinating snapshots, gating spouts, 
+  and error handling (communicating via Zookeeper)
+
+* Snapshot negotiation:
+
+--
+
+  * Pause spouts
+
+--
+
+  * Form next snapshot clock from the last spout offsets
+
+--
+
+  * Resume spouts, tell the bolts about the clock
+
+--
+
+* Error handling / boot-up:
+
+--
+
+  * Monitor a list of alive processors (Zookeeper ephemeral nodes)
+
+--
+
+  * Pause the world unless everyone is alive
+
+--
+
+  * Otherwise, wait for bolts to load snapshots and start flowing
+
+--
+  
+  * If processor dies, then reboot the world into the initial state
+
+
+
+
+---
+
 template: inverse
 
 background-image: url(images/storm_clouds_4.jpg)
