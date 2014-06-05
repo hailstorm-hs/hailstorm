@@ -17,6 +17,7 @@ import Hailstorm.Error
 import Hailstorm.Topology.HardcodedTopology
 import Hailstorm.Processor
 import Hailstorm.TransactionTypes
+import System.IO
 import Pipes
 import qualified Data.ByteString.Char8 as C8
 import qualified Data.Map as Map
@@ -24,6 +25,9 @@ import qualified Data.PSQueue as PS
 
 localServer :: String
 localServer = "127.0.0.1"
+
+outputFilename :: String
+outputFilename = "top_words.txt"
 
 forceDyn :: Typeable a => Dynamic -> a
 forceDyn x = case fromDynamic x of 
@@ -210,8 +214,13 @@ mergeSortBolt = Bolt
 printSorted :: Int -> Consumer PayloadTuple IO ()
 printSorted cnt = do
   (MkPayloadTuple x) <- await
-  lift $ when (cnt `mod` 500 == 0) $
-          print (forceDyn x :: [(String, Int)]) 
+  lift $ when (cnt `mod` 500 == 0) $ do
+      let wordsAndCounts = forceDyn x :: [(String, Int)]
+          outputWC h (w, c) = hPutStrLn h $ w ++ ": " ++ show c
+      h <- openFile outputFilename WriteMode
+      hPutStrLn h "Trending:"
+      mapM_ (outputWC h) wordsAndCounts
+      hClose h
   printSorted (cnt + 1)
 
 outputSink :: Sink
