@@ -228,9 +228,10 @@ layout: true
 # Architecture
 
 ---
+
 ## Running Example
 
-Image goes here
+![Hailstorm architecture](images/architecture.png)
 
 ---
 ## Exactly Once / Vector Clocks
@@ -252,6 +253,12 @@ Image goes here
 
 ## Spouts
 
+![Spouts](images/spout.png)
+
+---
+
+## Spouts
+
 * Spouts are responsible for getting data into the Hailstorm system
 
 * Each spout is locked to a single Kafka partition, performs data
@@ -268,6 +275,12 @@ Image goes here
 
 * Users of Hailstorm specify a pure deserialization function and all
   impure operations are handled internally.
+
+---
+
+## Bolts
+
+![Bolts](images/bolt.png)
 
 ---
 
@@ -331,6 +344,13 @@ _But when can we guarantee that A will no longer change?_
 # Architecture
 ## Sinks
 
+![Sinks](images/sink.png)
+
+---
+
+# Architecture
+## Sinks
+
 * Sinks are the gateway to the real world - after all computation is finished,
   they perform user-specified actions
 
@@ -342,6 +362,13 @@ _But when can we guarantee that A will no longer change?_
 
 * Sinks are the only part of the Hailstorm system where a user is allowed to 
   execute impure code.
+
+---
+
+# Architecture
+## The *Negotiator*
+
+![The Negotiator](images/negotiator.png)
 
 ---
 
