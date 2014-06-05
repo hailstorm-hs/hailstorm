@@ -188,13 +188,13 @@ layout: false
       1. If tuple offset &lt;= (`desiredSnapshotClock ! partition`), merge into A
       2. Otherwise, merge into B
 
-* When it is time to save a snapshot, A will no longer change. Then:
+* When A no longer changes, it is time to save a snapshot. Then:
     1. Fork thread to save A
     2. Revert to one state: A `mappend` B
 
 --
 
-_But when is it time to save a snapshot?_
+_But when can we guarantee that A will no longer change?_
 
 ---
 
