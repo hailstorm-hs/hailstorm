@@ -21,16 +21,18 @@ h1, h2, h3 {
   bottom: 2em;
   font-size: 0.8em;
 }
-.red { color: #fa0000; }
-.green { color: #006400; }
-
-.medium { font-size: 1.4em; }
-
-.large { font-size: 2em; }
 a {
   color: rgb(249, 38, 114);
   text-decoration: none;
 }
+
+/* Colors. */
+.red { color: #fa0000; }
+.green { color: #006400; }
+
+/* Font sizes. */
+.medium { font-size: 1.4em; }
+.large { font-size: 2em; }
 
 /* Code and syntax highlighting. */
 
@@ -53,6 +55,13 @@ a {
   line-height: 0.8em;
 }
 
+/* Additional classes. */
+
 .full-width-image img {
   width: 90%;
+}
+
+.small-code code {
+  font-size: 0.7em;
+}
 }

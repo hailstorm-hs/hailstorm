@@ -130,12 +130,13 @@ layout: true
 ---
 ## Haskakafka
 
-* :( No up-to-date Kafka bindings for Haskell 
+* :( No up-to-date Kafka bindings for Haskell
 
 * :) empowered C FFI-ers, write our own and name it [Haskakafka](https://github.com/cosbynator/haskakafka)
 
 * ''How bad could it be?''
 
+.small-code[
 ```
 {#fun unsafe rd_kafka_produce_batch as ^
     {`RdKafkaTopicTPtr', cIntConv `CInt32T', `Int', 
@@ -149,13 +150,14 @@ instance Storable RdKafkaMessageT where
         <*> liftM fromIntegral ({#get rd_kafka_message_t->offset#} p)
         <*> liftM castPtr ({#get rd_kafka_message_t->payload#} p)
     poke p x = do
-      {#set rd_kafka_message_t.partition#} p 
+      {#set rd_kafka_message_t.partition#} p
           (fromIntegral $ partition'RdKafkaMessageT x)
       {#set rd_kafka_message_t.len#} p (fromIntegral $ len'RdKafkaMessageT x)
-      {#set rd_kafka_message_t.offset#} p 
+      {#set rd_kafka_message_t.offset#} p
           (fromIntegral $ offset'RdKafkaMessageT x)
       {#set rd_kafka_message_t.payload#} p (castPtr $ payload'RdKafkaMessageT x)
 ```
+]
 
 ---
 
@@ -165,13 +167,41 @@ layout: false
 
 ---
 
-# When does a bolt save its state?
+# Clock
 
-![Architecture diagram showing low water marks for each bolt](images/low_water_mark.png)
 
-- Bolt C's LWM matches desired snapshot clock: .green[**save**]
-- Bolt D's LWM &lt; desired snapshot clock: .red[**wait**]
-- Bolt E's LWM = min(LWM C, LWM D) &lt; desired snapshot clock: .red[**wait**]
+---
+
+# Desired snapshot clock
+
+---
+
+# Low water mark (LWM)
+
+* Continuing with the plumbing analogies...
+
+* Low water mark = `Map Partition Offset` (same as a Clock)
+
+* Each payload carries collection of LWMs for every upstream worker.
+
+* `\(p^\textrm{th}\)` entry for LWM at node _n_  = minimum offset for partition
+  _p_ across all upstream LWMs
+    * At spout level, LWM[p] is simply the offset in the associated partition _p_
+    * At bolt level, LWM[p] = min(L[p] _for each_ L in upstream LWMs)
+
+.center[![Image showing how LWM is calculated](images/lwm.png)]
+
+---
+
+# Using LWM: saving snapshots
+
+![Architecture diagram showing low water marks for each bolt](images/lwm_snapshot.png)
+
+* Bolt can save a snapshot iff its LWM equals the desired snapshot clock in
+  _all_ directions
+  * Bolt C's LWM = desired snapshot clock: .green[**save**]
+  * Bolt D's LWM &lt;= desired snapshot clock: .red[**wait**]
+  * Bolt E's LWM = min(LWM C, LWM D) &lt;= desired snapshot clock: .red[**wait**]
 
 ---
 
