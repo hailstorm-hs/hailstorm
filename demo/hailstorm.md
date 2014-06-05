@@ -230,36 +230,3 @@ _But when is it time to save a snapshot?_
 template: inverse
 
 # Demo
-
----
-
-layout: false
-
-# Info about using remarks.js
-
-<!-- TODO: delele -->
-
-Any occurences of one or more dotted CSS class names followed by square brackets are replaced with the contents of the brackets with the specified classes applied:
-
-Pressing __P__ will toggle presenter mode.
-
-Pressing __C__ will open a cloned view of the current slideshow in a new
-browser window.
-
-.footnote[.red.bold[*] Footnote here]
-
-???
-
-Slide notes here...
-
-- More notes.
-- Some more notes.
-
----
-
-# Code sample (defaults to Haskell)
-
-```
-doSomething :: String -> IO ()
-doSomething s = putStrLn $ "hello, " ++ show s
-```
