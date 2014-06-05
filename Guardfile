@@ -31,7 +31,7 @@ end
 group :demo do
   guard :shell do
     watch(/\.store\/.*/) do |m|
-      puts "Snapshot changed: #{m[0]}".cyan
+      puts "Snapshot changed at #{Time.now.strftime("%I:%M:%S %p")}: #{m[0]}".cyan
       puts IO.read(m[0]).yellow
     end
   end
