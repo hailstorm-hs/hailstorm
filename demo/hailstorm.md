@@ -245,22 +245,24 @@ layout: true
 
 ## Spouts
 
-* Spouts are responsible for getting data into the Hailstorm system
+* Get data into Hailstorm
 
-* Each spout is locked to a single Kafka partition, performs data
-  deserialization and forwards tuples along with their offsets to downstreams
+* A single spout is locked to a single Kafka partition: deserializes data,
+  forwards tuples + offsets to downstreams
 
-* Downstreams partition the space (''bieber'' always goes to the same downstream,
-  so no individual processor gets overloaded)
+* Downstreams partition the space (''bieber'' always goes to the same
+  downstream, so no individual processor gets overloaded)
 
-* Because Kafka retains data indefinitely, the spouts are able to rewind
-  to a previous time. 
+* Rewinding
 
-* After Hailstorm initialization, spouts are rewound to the last good snapshot
-  of the system.
+    * Because Kafka retains data indefinitely, the spouts are able to rewind
+      to a previous time
 
-* Users of Hailstorm specify a pure deserialization function and all
-  impure operations are handled internally.
+    * During Hailstorm initialization, spouts are rewound to the last good
+      snapshot of the system
+
+* Users of Hailstorm specify a pure deserialization function: all
+  impure operations handled internally
 
 ---
 
