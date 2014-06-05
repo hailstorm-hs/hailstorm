@@ -86,7 +86,7 @@ layout: true
 * Disciplined approach to streaming computation across multiple machines
   in the presence of machine failures, network hiccups, etc.
 
-* Pioneer: [`Storm`](http://storm.incubator.apache.org/) by Apache/Twitter/Back-type/Nathan Marz
+* Pioneer: [Storm](http://storm.incubator.apache.org/) by Apache/Twitter/Back-type/Nathan Marz
 
   * Divides the world into Sources (spouts) and units of computation (Bolts) 
 
