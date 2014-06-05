@@ -198,7 +198,7 @@ layout: false
 ![Architecture diagram showing low water marks for each bolt](images/lwm_snapshot.png)
 
 * Bolt can save a snapshot iff its LWM equals the desired snapshot clock in
-  _all_ directions
+  _all_ dimensions
   * Bolt C's LWM = desired snapshot clock: .green[**save**]
   * Bolt D's LWM &lt;= desired snapshot clock: .red[**wait**]
   * Bolt E's LWM = min(LWM C, LWM D) &lt;= desired snapshot clock: .red[**wait**]
