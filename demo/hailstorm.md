@@ -6,6 +6,8 @@ class: center, middle, inverse
 
 template: inverse
 
+background-image: url(storm_clouds_intro.jpg)
+
 # Hailstorm
 
 ## Distributed stream processing with exactly-once semantics
@@ -103,7 +105,7 @@ layout: false
 
 template: inverse
 
-.center.large[Still with us?]
+# Still with us?
 
 ---
 
