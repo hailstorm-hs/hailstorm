@@ -271,7 +271,13 @@ Image goes here
 
 ---
 
+layout: false
+
+.float-right-slide-widget-narrowest[
+![Right-aligned image](images/bolt.jpeg)
+# Architecture
 ## Bolts
+]
 
 * Hailstorm &lt;3 monoids: represent bolt state using a _commutative_ monoid
 
@@ -293,6 +299,7 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
+# Architecture
 ## Low water mark (LWM)
 
 * Low water mark = `Map Partition Offset` (same as a Clock)
@@ -308,6 +315,7 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
+# Architecture
 ## Deciding when to save a snapshot
 
 ![Architecture diagram showing low water marks for each bolt](images/lwm_snapshot.png)
@@ -320,6 +328,7 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
+# Architecture
 ## Sinks
 
 * Sinks are the gateway to the real world - after all computation is finished,
@@ -336,7 +345,14 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
+layout: false
+
+.float-right-slide-widget-narrower[
+![Right-aligned image](images/negotiator.jpg)
+# Architecture
 ## The *Negotiator*
+]
+
 
 * Negotiator is responsible for co-ordinating snapshots, gating spouts, 
   and error handling (communicating via Zookeeper)

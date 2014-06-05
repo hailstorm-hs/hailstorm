@@ -79,3 +79,13 @@ a {
   float: right;
   width: 50%;
 }
+
+.float-right-slide-widget-narrower img {
+  float: right;
+  width: 35%;
+}
+
+.float-right-slide-widget-narrowest img {
+  float: right;
+  width: 20%;
+}
