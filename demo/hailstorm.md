@@ -6,7 +6,7 @@ class: center, middle, inverse
 
 template: inverse
 
-background-image: url(storm_clouds_intro.jpg)
+background-image: url(images/storm_clouds_intro.jpg)
 
 # Hailstorm
 
@@ -105,7 +105,7 @@ layout: true
 
 template: inverse
 
-background-image: url(storm_clouds_2.jpg)
+background-image: url(images/storm_clouds_2.jpg)
 
 # Still with us?
 
@@ -292,5 +292,7 @@ _But when can we guarantee that A will no longer change?_
 ---
 
 template: inverse
+
+background-image: url(images/storm_clouds_4.jpg)
 
 # Demo
