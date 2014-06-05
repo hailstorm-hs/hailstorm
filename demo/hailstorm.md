@@ -301,14 +301,12 @@ _But when can we guarantee that A will no longer change?_
 # Architecture
 ## Low water mark (LWM)
 
-* Low water mark = `Map Partition Offset` (same as a Clock)
+* Low water mark is a `Map Partition Offset` (same as a Clock)
 
 * Each payload carries collection of LWMs for every upstream worker.
 
-* `\(p^\textrm{th}\)` entry for LWM at node _n_  = minimum offset for partition
-  _p_ across all upstream LWMs
-    * At spout level, LWM[p] is simply the offset in the associated partition _p_
-    * At bolt level, LWM[p] = min(L[p] _for each_ L in upstream LWMs)
+* The `\(p^\textrm{th}\)` entry in an LWM represents the lowest
+  offset for partition _p_ as seen by all upstream nodes.
 
 .center[![Image showing how LWM is calculated](images/lwm.png)]
 
