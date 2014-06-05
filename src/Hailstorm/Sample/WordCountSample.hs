@@ -216,9 +216,8 @@ printSorted cnt = do
   (MkPayloadTuple x) <- await
   lift $ when (cnt `mod` 500 == 0) $ do
       let wordsAndCounts = forceDyn x :: [(String, Int)]
-          outputWC h (w, c) = hPutStrLn h $ w ++ ": " ++ show c
+          outputWC h (w, c) = hPutStrLn h $ w ++ "," ++ show c
       h <- openFile outputFilename WriteMode
-      hPutStrLn h "Trending:"
       mapM_ (outputWC h) wordsAndCounts
       hClose h
   printSorted (cnt + 1)
