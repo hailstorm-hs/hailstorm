@@ -199,7 +199,7 @@ instance Storable RdKafkaMessageT where
 
 ---
 
-layout: false
+layout: true
 
 .float-right-slide-widget[
 ![Right-aligned image](images/nathanmarz.jpg)
@@ -225,26 +225,25 @@ background-image: url(images/storm_clouds_3.jpg)
 
 ---
 
-layout: false
+layout: true
 
 # Architecture
 
 ---
 
-# Clock
-
-
----
-
-# Desired snapshot clock
+## Clock
 
 ---
 
-# Bolt operation
+## Desired snapshot clock
 
-* Hailstorm &lt;3 monoids: represent bolt state using a monoid
+---
 
-* Each incoming tuple is `mappend`-ed to state
+## Bolt operation
+
+* Hailstorm &lt;3 monoids: represent bolt state using a _commutative_ monoid
+
+* Each incoming tuple is merged with state (`mappend`, but commutative)
 
 * Whenever negotiator publishes a new `desiredSnapshotClock`:
     1. Make two states, A and B (A = current state, B = `mempty`)
@@ -262,9 +261,7 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
-# Low water mark (LWM)
-
-* Continuing with the plumbing analogies...
+## Low water mark (LWM)
 
 * Low water mark = `Map Partition Offset` (same as a Clock)
 
@@ -279,7 +276,7 @@ _But when can we guarantee that A will no longer change?_
 
 ---
 
-# Deciding when to save a snapshot
+## Deciding when to save a snapshot
 
 ![Architecture diagram showing low water marks for each bolt](images/lwm_snapshot.png)
 

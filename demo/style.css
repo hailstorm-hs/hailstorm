@@ -13,9 +13,9 @@ h1, h2, h3 {
   margin-top: 20px;
   margin-bottom: 0;
 }
-.remark-slide-content h1 { font-size: 3em; }
-.remark-slide-content h2 { font-size: 2em; }
-.remark-slide-content h3 { font-size: 1.6em; }
+.remark-slide-content h1 { font-size: 2.5em; }
+.remark-slide-content h2 { font-size: 1.5em; margin-top: 10px; }
+.remark-slide-content h3 { font-size: 1.2em; }
 .footnote {
   position: absolute;
   bottom: 2em;
@@ -56,6 +56,9 @@ a {
   color: #f3f3f3;
   line-height: 0.8em;
 }
+.inverse h1 { font-size: 3em; }
+.inverse h2 { font-size: 2em; margin-top: 20px; }
+.inverse h3 { font-size: 1.6em; }
 
 /* Additional classes. */
 
