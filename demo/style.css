@@ -25,6 +25,7 @@ a {
   color: rgb(249, 38, 114);
   text-decoration: none;
 }
+.remark-slide-number { visibility: hidden; }
 
 /* Colors. */
 .red { color: #fa0000; }

@@ -27,20 +27,6 @@ class: center
 
 ---
 
-layout: false
-
-# Outline
-
-1. Introduction
-2. Background
-3. Architecture
-4. Exactly Once Semantics
-5. Topologies
-6. Demo
-7. Sayonara
-
----
-
 layout: true
 
 # Introduction
