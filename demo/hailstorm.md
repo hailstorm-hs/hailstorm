@@ -41,7 +41,11 @@ layout: false
 
 ---
 
+layout: true
+
 # Introduction
+
+---
 
 ## Batch Processing?
 
@@ -57,8 +61,6 @@ layout: false
   * On machine / job failure, the job rescheduled somewhere else 
 
 ---
-
-# Introduction
 
 ## Stream Processing!?
 
@@ -78,8 +80,6 @@ layout: false
 
 
 ---
-
-# Introduction
 
 ## Distributed Stream Processing
 
@@ -105,6 +105,8 @@ layout: false
 
 template: inverse
 
+background-image: url(storm_clouds_2.jpg)
+
 # Still with us?
 
 ---
@@ -114,7 +116,6 @@ layout: true
 # Background
 
 ---
-
 ## Storm
 
 * Some
@@ -124,6 +125,37 @@ layout: true
 ---
 
 ## Kafka
+
+
+---
+## Haskakafka
+
+* :( No up-to-date Kafka bindings for Haskell 
+
+* :) empowered C FFI-ers, write our own and name it [Haskakafka](https://github.com/cosbynator/haskakafka)
+
+* ''How bad could it be?''
+
+```
+{#fun unsafe rd_kafka_produce_batch as ^
+    {`RdKafkaTopicTPtr', cIntConv `CInt32T', `Int', 
+     `RdKafkaMessageTPtr', `Int'} -> `Int' #}
+instance Storable RdKafkaMessageT where
+    alignment _ = {#alignof rd_kafka_message_t#}
+    sizeOf _ = {#sizeof rd_kafka_message_t#}
+    peek p = RdKafkaMessageT
+        <$> liftM cIntToEnum  ({#get rd_kafka_message_t->err #} p)
+        <*> liftM fromIntegral ({#get rd_kafka_message_t->partition #} p)
+        <*> liftM fromIntegral ({#get rd_kafka_message_t->len #} p)
+        <*> liftM fromIntegral ({#get rd_kafka_message_t->offset#} p)
+        <*> liftM castPtr ({#get rd_kafka_message_t->payload#} p)
+    poke p x = do
+      {#set rd_kafka_message_t.err#} p (enumToCInt $ err'RdKafkaMessageT x)
+      {#set rd_kafka_message_t.partition#} p (fromIntegral $ partition'RdKafkaMessageT x)
+      {#set rd_kafka_message_t.len#} p (fromIntegral $ len'RdKafkaMessageT x)
+      {#set rd_kafka_message_t.offset#} p (fromIntegral $ offset'RdKafkaMessageT x)
+      {#set rd_kafka_message_t.payload#} p (castPtr $ payload'RdKafkaMessageT x)
+```
 
 ---
 
