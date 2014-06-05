@@ -109,32 +109,70 @@ background-image: url(storm_clouds_2.jpg)
 
 # Still with us?
 
+
 ---
 
-layout: true
+layout: false
+
+.float-right-slide-widget[
+![Right-aligned image](images/zookeeper.png)
+# Background
+
+## Zookeeper
+]
+
+* Highly available distributed system for coordination 
+  .tiny[(the most used system you have never heard of)]
+
+* Exposes a file system-like interface with files (aka nodes) 
+  replicated across different machines
+
+* Ephemeral nodes: files that disappear when a connection does
+
+  * We register our processor into a node, and when it crashes the node *disappears*
+
+* Node watchers: asynchronous notifications
+  * A program can set a watcher and get notified whenever a node gets deleted or 
+    modified, or directory contents change
+
+* Haskell bindings [hzk](https://github.com/dgvncsz0f/hzk) are semi-okay!
+
+
+---
+
+.float-right-slide-widget-wide[
+![Right-aligned image](images/kafka_logo.png)
 
 # Background
 
----
-## Storm
-
-* Some
-* Stuff
-* Here
-
----
-
 ## Kafka
+]
+
+* Acts like a message queue, except old messages do not get popped
+.center[![Kafka Producer Consumer](images/kafka_producer_consumer.png)]
+
+* Each incoming message gets routed to a different *partition*, wherein
+  they are linearly ordered with an *offset*
+.center[![Kafka Topic](images/kafka_anatomy.png)]
 
 
 ---
+.float-right-slide-widget[
+![Right-aligned image](images/thomas.jpg)
+# Background
+
 ## Haskakafka
+]
 
 * :( No up-to-date Kafka bindings for Haskell
 
 * :) empowered C FFI-ers, write our own and name it [Haskakafka](https://github.com/cosbynator/haskakafka)
 
+--
+
 * ''How bad could it be?''
+
+--
 
 .small-code[
 ```
@@ -158,6 +196,32 @@ instance Storable RdKafkaMessageT where
       {#set rd_kafka_message_t.payload#} p (castPtr $ payload'RdKafkaMessageT x)
 ```
 ]
+
+---
+
+layout: false
+
+.float-right-slide-widget[
+![Right-aligned image](images/nathanmarz.jpg)
+# Background
+
+## Storm
+]
+
+* Distributed stream processor with at-least-once semantics
+
+.center[![Storm Topology](images/storm_topology.png)]
+
+* Our project uses the same nomenclature, a similar design but
+  is implemented independently Haskell and provides exactly-once semantics
+
+---
+
+template: inverse
+
+background-image: url(images/storm_clouds_3.jpg)
+
+# Enter Hailstorm
 
 ---
 
