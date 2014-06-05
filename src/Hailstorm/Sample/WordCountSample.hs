@@ -129,7 +129,7 @@ mergePSTopN n p1 p2 =
 
 
 amtToSelect :: Int
-amtToSelect = 3
+amtToSelect = 20 
 
 topNBolt :: Bolt
 topNBolt = Bolt
@@ -167,7 +167,7 @@ topNBolt = Bolt
     }
 
 outputAmt :: Int
-outputAmt = 2
+outputAmt = 20
 
 mergeSortBolt:: Bolt
 mergeSortBolt = Bolt
@@ -210,7 +210,7 @@ mergeSortBolt = Bolt
 printSorted :: Int -> Consumer PayloadTuple IO ()
 printSorted cnt = do
   (MkPayloadTuple x) <- await
-  lift $ when (cnt `mod` 2000 == 0) $
+  lift $ when (cnt `mod` 500 == 0) $
           print (forceDyn x :: [(String, Int)]) 
   printSorted (cnt + 1)
 
