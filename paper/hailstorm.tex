@@ -80,12 +80,36 @@ guarantee that side-effects of computation are isolated to a single
 
 
 \section{Related Work}
+Hailstorm's technical design is based on that of Apache Storm~\cite{storm}. 
+Storm is a widely used stream processing framework for
+the Java Virtual Machine (JVM) allowing developers to upload jobs for continuous
+processing on a Storm cluster. Developers create a directed acyclic graph of
+interconnected processing layers called a \textit{topology}.
+Messages are passed between layers as
+\textit{tuples}. Tuples originate in a \textit{spout}, which typically reads
+off of a distributed queue and are passed between layers of \textit{bolts} which
+perform computation. Each bolt receives a tuple, performs a computation, and 
+emits zero or more tuples to the next layer. Unlike Hailstorm, the bolts have
+may have side effects to their computation and state management / error recovery
+is left up to each developer. Accordingly, the system is only able to provide 
+``at least once'' guarantees for processing each message in the queue. On
+component failure, Storm enters a ``tuple replay'' state where it re-sends
+messages from spouts in a topology. 
 
-In Exactly Once Semantics~\cite{jackson2014}, Jackson describes some stuff.
+The theoretical underpinings of Hailstorm are inspired by a online essay, 
+``Exactly Once Semantics''~\cite{jackson2014}. Jackson, a contributor to the 
+Storm framework, describes Kafka log offsets as a vector clock for the system
+state. This clock allows separate processors to perform synchronized snapshots
+without locking or direct communication. We further describe the offset clock 
+in Section~\ref{sec:clock}.
 
-We base our system on the design of Storm~\cite{storm}
-
-Also, let's talk about Google's MillWheel system~\cite{millwheel}
+Google's MillWheel system~\cite{millwheel} also addresses the issue of exactly
+once delivery of messages in a stream processing context. Like Storm,
+messages flow through layers of computation to end up at a final result.
+MillWheel provides exactly-once semantics by maintaining set of recently
+processed tuples, discarding those that have recently appeared. Users of
+MillWheel are required to manually ensure that all computations are 
+idempotent, as system failure induces message re-delivery to the same processor.
 
 \section{Hailstorm Overview}
 
@@ -101,6 +125,9 @@ Haskakafka\footnote{\url{http://hackage.haskell.org/package/haskakafka}}
 \subsection{Apache Zookeeper}
 
 Zookeeper~\cite{zookeeper} is the best.
+
+\subsection{Clock}
+\label{sec:clock}
 
 \subsection{Spouts}
 
