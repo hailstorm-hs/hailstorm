@@ -8,3 +8,5 @@
 *.synctex.gz
 *.synctex.gz(busy)
 *.run.xml
+*.dvi
+*.pdf

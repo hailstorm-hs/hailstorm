@@ -6,5 +6,3 @@ cabal.sandbox.config
 bin/
 .store/
 log-cleaner.log
-paper/*.pdf
-paper/*.dvi
