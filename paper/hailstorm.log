@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.1415926-2.5-1.40.14 (TeX Live 2013/Debian) (format=pdflatex 2014.6.7)  7 JUN 2014 21:17
+This is pdfTeX, Version 3.1415926-2.5-1.40.14 (TeX Live 2013/Debian) (format=pdflatex 2014.6.7)  7 JUN 2014 23:35
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -254,54 +254,29 @@ File: pdftex.def 2011/05/27 v0.06d Graphics/color for pdfTeX
 \Gin@req@height=\dimen117
 \Gin@req@width=\dimen118
 )
-(/usr/share/texlive/texmf-dist/tex/latex/blindtext/blindtext.sty
-Package: blindtext 2012/01/06 V2.0 blindtext-Package
-
-(/usr/share/texlive/texmf-dist/tex/latex/tools/xspace.sty
-Package: xspace 2009/10/20 v1.13 Space after command names (DPC,MH)
-)
-\c@blindtext=\count115
-\c@Blindtext=\count116
-\c@blind@countparstart=\count117
-\blind@countxx=\count118
-\blindtext@numBlindtext=\count119
-\blind@countyy=\count120
-\c@blindlist=\count121
-\c@blindlistlevel=\count122
-\c@blindlist@level=\count123
-\blind@listitem=\count124
-\c@blind@listcount=\count125
-\c@blind@levelcount=\count126
-\blind@mathformula=\count127
-\blind@Mathformula=\count128
-\c@blind@randomcount=\count129
-\c@blind@randommax=\count130
-\c@blind@pangramcount=\count131
-\c@blind@pangrammax=\count132
-) (./hailstorm.aux)
+(./hailstorm.aux)
 \openout1 = `hailstorm.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 14.
-LaTeX Font Info:    ... okay on input line 14.
-LaTeX Font Info:    Try loading font information for T1+ptm on input line 14.
-
-(/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1ptm.fd
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 11.
+LaTeX Font Info:    ... okay on input line 11.
+LaTeX Font Info:    Try loading font information for T1+ptm on input line 11.
+ (/usr/share/texlive/texmf-dist/tex/latex/psnfss/t1ptm.fd
 File: t1ptm.fd 2001/06/04 font definitions for T1/ptm.
 )
 \AtBeginShipoutBox=\box29
-Package hyperref Info: Link coloring OFF on input line 14.
+Package hyperref Info: Link coloring OFF on input line 11.
 
 (/usr/share/texlive/texmf-dist/tex/latex/hyperref/nameref.sty
 Package: nameref 2012/10/27 v2.43 Cross-referencing by name of section
@@ -309,11 +284,11 @@ Package: nameref 2012/10/27 v2.43 Cross-referencing by name of section
 (/usr/share/texlive/texmf-dist/tex/generic/oberdiek/gettitlestring.sty
 Package: gettitlestring 2010/12/03 v1.4 Cleanup title references (HO)
 )
-\c@section@level=\count133
+\c@section@level=\count115
 )
-LaTeX Info: Redefining \ref on input line 14.
-LaTeX Info: Redefining \pageref on input line 14.
-LaTeX Info: Redefining \nameref on input line 14.
+LaTeX Info: Redefining \ref on input line 11.
+LaTeX Info: Redefining \pageref on input line 11.
+LaTeX Info: Redefining \nameref on input line 11.
 
 (./hailstorm.out) (./hailstorm.out)
 \@outlinefile=\write3
@@ -322,16 +297,16 @@ LaTeX Info: Redefining \nameref on input line 14.
 
 (/usr/share/texlive/texmf-dist/tex/context/base/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
-\scratchcounter=\count134
+\scratchcounter=\count116
 \scratchdimen=\dimen119
 \scratchbox=\box30
-\nofMPsegments=\count135
-\nofMParguments=\count136
+\nofMPsegments=\count117
+\nofMParguments=\count118
 \everyMPshowfont=\toks22
-\MPscratchCnt=\count137
+\MPscratchCnt=\count119
 \MPscratchDim=\dimen120
-\MPnumerator=\count138
-\makeMPintoPDFobject=\count139
+\MPnumerator=\count120
+\makeMPintoPDFobject=\count121
 \everyMPtoPDFconversion=\toks23
 ) (/usr/share/texlive/texmf-dist/tex/latex/oberdiek/epstopdf-base.sty
 Package: epstopdf-base 2010/02/09 v2.5 Base part for package epstopdf
@@ -349,72 +324,80 @@ File: epstopdf-sys.cfg 2010/07/13 v1.3 Configuration of (r)epstopdf for TeX Liv
 e
 ))
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <17.28> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 31.
-LaTeX Font Info:    Try loading font information for T1+cmss on input line 31.
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 28.
+LaTeX Font Info:    Try loading font information for T1+cmss on input line 28.
 
 (/usr/share/texlive/texmf-dist/tex/latex/base/t1cmss.fd
 File: t1cmss.fd 1999/05/25 v2.5h Standard LaTeX font definitions
 )
 LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <12> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 32.
-LaTeX Font Info:    Try loading font information for T1+cmtt on input line 38.
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 29.
+LaTeX Font Info:    Try loading font information for T1+cmtt on input line 35.
 
 (/usr/share/texlive/texmf-dist/tex/latex/base/t1cmtt.fd
 File: t1cmtt.fd 1999/05/25 v2.5h Standard LaTeX font definitions
 )
-LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
-(Font)              Font shape `T1/ptm/b/n' tried instead on input line 59.
+Underfull \hbox (badness 1231) in paragraph at lines 65--75
+\T1/ptm/m/n/10 Kafka [[]]. These re-stric-tions al-low Hail-storm to make
+ []
 
-<images/architecture.png, id=45, 742.775pt x 496.85625pt>
+LaTeX Font Info:    Font shape `T1/ptm/bx/n' in size <10> not available
+(Font)              Font shape `T1/ptm/b/n' tried instead on input line 89.
+<images/architecture.png, id=62, 742.775pt x 496.85625pt>
 File: images/architecture.png Graphic file (type png)
 
 <use images/architecture.png>
-Package pdftex.def Info: images/architecture.png used on input line 74.
+Package pdftex.def Info: images/architecture.png used on input line 106.
 (pdftex.def)             Requested size: 252.0pt x 168.56497pt.
 
-Overfull \hbox (12.0pt too wide) in paragraph at lines 74--75
+Overfull \hbox (12.0pt too wide) in paragraph at lines 106--107
  [][] 
  []
 
-(./hailstorm.bbl
-Underfull \hbox (badness 10000) in paragraph at lines 32--36
-[]$\T1/cmtt/m/n/9 https : / / github . com / jasonjckn / essays / blob /
- []
 
-)
-Package atveryend Info: Empty hook `BeforeClearDocument' on input line 85.
+Underfull \vbox (badness 1888) has occurred while \output is active []
+
  [1{/var/lib/texmf/fonts/map/pdftex/updmap/pdftex.map}
 
 
 Non-PDF special ignored!
 
+] (./hailstorm.bbl
+Underfull \hbox (badness 10000) in paragraph at lines 45--49
+[]$\T1/cmtt/m/n/9 https : / / github . com / jasonjckn / essays / blob /
+ []
+
+)
+Package atveryend Info: Empty hook `BeforeClearDocument' on input line 121.
+ [2
+
  <./images/architecture.png>]
-Package atveryend Info: Empty hook `AfterLastShipout' on input line 85.
+Package atveryend Info: Empty hook `AfterLastShipout' on input line 121.
  (./hailstorm.aux)
-Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 85.
-Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 85.
+Package atveryend Info: Executing hook `AtVeryEndDocument' on input line 121.
+Package atveryend Info: Executing hook `AtEndAfterFileList' on input line 121.
 Package rerunfilecheck Info: File `hailstorm.out' has not changed.
-(rerunfilecheck)             Checksum: 6FD6ED553B778A5D48EF5A7FCAE04490;418.
-Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 85.
+(rerunfilecheck)             Checksum: E5EE21D14C1C55CBF379935B257A3486;593.
+Package atveryend Info: Empty hook `AtVeryVeryEnd' on input line 121.
  ) 
 Here is how much of TeX's memory you used:
- 6654 strings out of 495028
- 94534 string characters out of 6181498
- 181862 words of memory out of 5000000
- 9767 multiletter control sequences out of 15000+600000
+ 6488 strings out of 495028
+ 91710 string characters out of 6181498
+ 178977 words of memory out of 5000000
+ 9602 multiletter control sequences out of 15000+600000
  43379 words of font info for 56 fonts, out of 8000000 for 9000
  14 hyphenation exceptions out of 8191
- 30i,7n,30p,296b,340s stack positions out of 5000i,500n,10000p,200000b,80000s
+ 30i,7n,30p,308b,350s stack positions out of 5000i,500n,10000p,200000b,80000s
  </home/tdimson/.texmf-var/fonts/pk/ljfour/jknappen/ec/ectt0900.600pk> </home
 /tdimson/.texmf-var/fonts/pk/ljfour/jknappen/ec/ectt0800.600pk>{/usr/share/texl
 ive/texmf-dist/fonts/enc/dvips/base/8r.enc} </home/tdimson/.texmf-var/fonts/pk/
 ljfour/jknappen/ec/ecss1000.600pk></usr/share/texlive/texmf-dist/fonts/type1/ur
 w/times/utmb8a.pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmr8a.
 pfb></usr/share/texlive/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on hailstorm.pdf (1 page, 98208 bytes).
+Output written on hailstorm.pdf (2 pages, 105829 bytes).
 PDF statistics:
- 168 PDF objects out of 1000 (max. 8388607)
- 94 compressed objects within 1 object stream
- 20 named destinations out of 1000 (max. 500000)
- 70 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 204 PDF objects out of 1000 (max. 8388607)
+ 120 compressed objects within 2 object streams
+ 26 named destinations out of 1000 (max. 500000)
+ 94 words of extra memory for PDF output out of 10000 (max. 10000000)
 

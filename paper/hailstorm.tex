@@ -8,9 +8,6 @@
 \usepackage{hyperref}
 \usepackage{graphicx}
 
-% For draft paper only (TODO: remove)
-\usepackage{blindtext}
-
 \begin{document}
 
 \special{papersize=8.5in,11in}
@@ -20,7 +17,7 @@
 \titlebanner{banner above paper title}        % These are ignored unless
 \preprintfooter{short description of paper}   % 'preprint' option specified.
 
-\title{Hailstorm: Distributed stream processing with exactly once semantics}
+\title{Hailstorm: Distributed Stream Processing with Exactly Once Semantics}
 \subtitle{CS240h Final Project, Spring 2014}
 
 \authorinfo{Thomas Dimson \and Milind Ganjoo}
@@ -35,17 +32,46 @@ to handle real-time applications where the latency of Hadoop is inappropriate. M
 systems, such as Twitter's Storm, provide a rigid platform for performing distributed
 computations over the network. Storm-like systems typically provide at-least-once processing 
 with state management left to the implementor. We present a novel distributed
-stream processing framework, \textit{Hailstorm}\footnote{\url{https://github.com/hailstorm-hs/hailstorm}}, which provides a platform to perform distributed
-commuative monoidic operations on a stream of data in Haskell. By restricting the 
-class of computation, our system is provides exactly-once semantics 
-with little performance loss or added complexity. 
-
+stream processing framework, \textit{Hailstorm}\footnote{\url{https://github.com/hailstorm-hs/hailstorm}}, which provides a platform to perform distributed computation
+on streams of data in Haskell. By restricting the 
+class of computation to commutative monoids, our system is able to provide
+exactly-once semantics with little performance loss or added complexity. 
 \end{abstract}
 
-% \keywords
-% keyword1, keyword2
-
 \section{Introduction}
+\label{sec:introduction}
+As the Internet has evolved so have user expectations in regards to latency.
+In one example, Twitter's trending topics feature allows users to see 
+breaking stories within minutes of their emergence. In another, Google Analytics, 
+administrators are able to see detailed demographic information of surfers in real time.
+The volume and velocity of the data in these systems presents challenges to typical
+single-machine programs: data does not fit into memory, and latency requirements
+imply that error recovery has to be automatic and nearly instantaneous.
+
+Like MapReduce~\cite{mapreduce} and batch processing, frameworks such as Twitter's 
+Storm~\cite{storm} and LinkedIn's Samza~\cite{samza} have been created to ease 
+the development of stream processing applications. In these systems, events of interest are 
+pushed into distributed queues from user-facing applications (e.g., Twitter's web site).
+As the events are popped off the queues, the stream processing framework takes
+over and transforms the event using a sequence of computations. For example,
+we might receive Tweets from the queue, split on whitespace and perform a windowed
+count to determine topics that are currently trending. Similar to MapReduce, 
+developers using these systems write algorithms that operate on individual 
+stream \textit{units} and emit zero or more \textit{messages} to be handled by the next
+stage in computation. The frameworks distribute the events
+to clusters running the computation, abstracting away the 
+unreliable nature of the network.
+
+This paper introduces Hailstorm, a stream processing framework in Haskell. 
+Unlike Storm and Samza, Hailstorm mandates that all streaming computations
+must be both commutative and monoidic. Like Samza, it requires that all
+events must be initially stored as messages in Apache Kafka~\cite{kafka}.
+These restrictions allow Hailstorm to make stronger processing guarantees
+about events: namely, that the each event will be processed \textit{exactly}
+once in the system. Furthermore, unlike Storm and Samza, state recovery under
+error conditions is built-in to the framework. We utilize Haskell's purity
+to guarantee that side-effects of computation are isolated to a single
+\textit{sink} processor at the end of the computation sequence.
 
 
 \section{Related Work}
@@ -55,7 +81,11 @@ We base our system on the design of Storm~\cite{storm}
 
 Also, let's talk about Google's MillWheel system~\cite{millwheel}
 
-\section{Foundational Systems}
+
+\section{Hailstorm Overview}
+Figure~\ref{fig:topology} shows a complete example of a Hailstorm system 
+used to calculate trending hashtags in real-time using the Twitter firehose.
+
 \subsection{Apache Kafka}
 Kafka~\cite{kafka} is fantastic.
 
@@ -64,16 +94,22 @@ Haskakafka \footnote{\url{http://hackage.haskell.org/package/haskakafka}}
 \subsection{Apache Zookeeper}
 Zookeeper~\cite{zookeeper} is the best.
 
+\subsection{Spouts}
 
-\section{Hailstorm Overview}
-Let's talk about how the components fit together 
-(spouts, bolts, etc.)
+\subsection{Bolts}
+
+\subsection{Sinks}
+
 
 \begin{figure}
 \centering
 \includegraphics[width=0.5\textwidth]{images/architecture.png}
 \caption{An example Hailstorm topology for word counts}
+\label{fig:topology}
 \end{figure}
+
+\subsection{Example Topology}
+Talk in detail about how hashtag counting works.
 
 \section{Next Steps}
 
