@@ -113,6 +113,14 @@ idempotent, as system failure induces message re-delivery to the same processor.
 
 \section{Hailstorm Overview}
 
+
+\begin{figure}
+\centering
+\includegraphics[width=0.5\textwidth]{images/architecture.pdf}
+\caption{An example Hailstorm topology for word counts}
+\label{fig:topology}
+\end{figure}
+
 Figure~\ref{fig:topology} shows a complete example of a Hailstorm system used
 to calculate trending hashtags in real-time using the Twitter firehose. We give
 a brief overview of the various components describe them in detail in the
@@ -154,11 +162,34 @@ upcoming sections.
 \end{itemize}
 
 \subsection{Apache Kafka}
+\begin{figure}
+  \includegraphics[width=0.45\textwidth]{images/kafka_log.png}
+  \caption{Structure of Kafka partitions}
+  \label{fig:kafka}
+\end{figure}
 
-Kafka~\cite{kafka} is fantastic.
+Apache Kafka~\cite{kafka} is a distributed commit log that is used to buffer data between
+producing systems (e.g., the Twitter Firehose) and Hailstorm topologies. As
+described in~\ref{sec:clock}, Hailstorm requires the use of Kafka so it can
+guarantee exactly-once processing of messaages. Messages are committed to
+specific \textit{topics}, each with many \textit{partitions}. Within each
+partition, commits are guaranteed to be linearly ordered according to time, with
+Kafka providing an offset for each message. Figure~\ref{fig:kafka}, from the
+Kafka website, shows the anatomy of a single topic as writes get fanned out to
+different partitions. Consumers, such as Hailstorm spouts, are able to read from
+individual partitions with a topic and consume mesages. Since the messages are
+structured in a log, it is possible to ``rewind'' consumers and have them read
+messages from earlier points in the log. Kafka also has a configerable replication 
+mechanism and is able to maintain its ordering even in the event of machine failure.
 
-Haskakafka\footnote{\url{http://hackage.haskell.org/package/haskakafka}}
-\
+The latest version of the Kafka protocol lacks bindings for Haskell, however the
+librdkafka~\cite{rdkafka} library provides up-to-date bindings for C. As part
+of completing Hailstorm, we created the \textit{Haskakafka}\footnote{
+\url{http://hackage.haskell.org/package/haskakafka}} library that exposes
+librdkafka through Haskell's C FFI. We have since made the bindings available on
+Hackage for others to use.
+
+
 \subsection{Apache Zookeeper}
 
 Zookeeper~\cite{zookeeper} is the best.
@@ -171,14 +202,6 @@ Zookeeper~\cite{zookeeper} is the best.
 \subsection{Bolts}
 
 \subsection{Sinks}
-
-
-\begin{figure}
-\centering
-\includegraphics[width=0.5\textwidth]{images/architecture.pdf}
-\caption{An example Hailstorm topology for word counts}
-\label{fig:topology}
-\end{figure}
 
 \subsection{Example Topology}
 Talk in detail about how hashtag counting works.
