@@ -5,6 +5,7 @@
 *.bcf
 *.blg
 *.fls
+*.log
 *.synctex.gz
 *.synctex.gz(busy)
 *.run.xml
