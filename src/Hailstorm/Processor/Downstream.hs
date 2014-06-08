@@ -105,8 +105,8 @@ killRef iref = do
         Nothing -> return ()
 
 serveForkOS :: HostPreference
-            -> ServiceName
-            -> ((Socket, SockAddr) -> IO ()) -> IO r
+            -> NS.ServiceName
+            -> ((NS.Socket, NS.SockAddr) -> IO ()) -> IO r
 serveForkOS hp port k =
     listen hp port $ \(lsock,_) -> forever $ acceptForkOS lsock k
 
@@ -121,7 +121,7 @@ acceptForkOS lsock f = do
 -- | Returns a Producer that receives a stream of payloads through a given
 -- socket and deserializes them.
 socketProducer :: ProcessorNode
-               -> Socket
+               -> NS.Socket
                -> Producer Payload IO ()
 socketProducer p s = do
     h <- lift $ socketToHandle s ReadWriteMode
