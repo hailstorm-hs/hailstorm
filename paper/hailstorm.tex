@@ -206,8 +206,7 @@ with its identifier underneath a Zookeeper directory called
 \texttt{living\_processors}. As described in Section~\ref{sec:negotiator}, the
 negotiator monitors this directory to ascertain the health of the system.
 
-Hailstorm uses the hzk library\footnote{
-\url{https://hackage.haskell.org/package/hzk}}, which exposes the
+Hailstorm uses the hzk library~\cite{hzk}, which exposes the
 Zookeeper C library to Haskell. The watcher notifications in Hailstorm occur in
 a seperate (OS) thread, which communicates the value of the change
 back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
@@ -291,19 +290,60 @@ processor reads this as a signal to restart, so that the topology can restart in
 a clean state. Thus the \texttt{Initialize} master state is identical to that of
 the negotiator's initial start.
 
-\section{Haskell Implementation}
-%% TODO: Milind, we should probably talk about how we use Pipes+Pipes Concurrent 
-%% to wire up processors. Additionally, maybe we can discuss how a user
-%% specifies a bolt / typeclasses. Some of the details might fit better into the
-%% Bolt section?
+\section{Implementation Details}
+\subsection{Command Line Interface}
+%% TODO: write this
+
+\subsection{Network Processing}
+Hailstorm utilizes the Haskell Pipes~\cite{pipes} library
+in place of Lazy I/O. Within
+a processor, the next layer is modeled as a \texttt{Pool} consumer
+\footnote{See \texttt{Processor/Pool.hs}} that keeps a connection pool
+of downstream processor sockets. The \texttt{Pool} consumer waits for a
+Hailstorm \texttt{Payload}, hashes it, and then sends it via a network socket
+\texttt{Handle}. Handles themselves are lazily created and maintained within a
+connection pool.
+
+Bolt and spout layers listen for incoming connections and process their
+messages. After initialization, they instantiate a \textit{mailbox} using the
+Pipes-Concurrency~\cite{pipes-concurrency} library and fork a listener
+thread\footnote{See \texttt{Processor/Downstream.hs}}. The listener thread 
+accepts upstream connections and forks handlers that push incoming tuples 
+into the mailbox. The main processor thread creates a Pipes pipeline that
+consumes messages from the mailbox, processes them in a pipes
+and then sends output to a consumer (\texttt{Pool} for bolts, 
+IO for sinks).
 
 \subsection{Example Topology}
+%%% TODO: find a home for this
 Talk in detail about how hashtag counting works\footnote{See
 \texttt{Sample/WordCountSample.hs}}
 
 \section{Next Steps}
+Our Hailstorm implementation is functionally complete, but could use some
+polishing before a public release. 
+
+Currently, the only the \texttt{HardcodedTopology} data type conforms to the the
+\texttt{Topology} type-class. Accordingly, a user of Hailstorm has to program
+the network port and address for each processor into the Hailstorm binary
+itself. A modification to Hailstorm would register each the network address 
+in the Zookeeper processor registry. The modification would allow processors to
+be resumed on different machines then they started on.
+
+In that direction, we would like to structure the framework closer to a Hadoop
+cluster wherein developers upload \textit{jobs} to Hailstorm. We envision
+developers ``uploading'' their processors into Zookeeper, with Hailstorm
+executing the specification. The framework would utilize a package like
+hint~\cite{hint} to provide dynamic code execution from Zookeeper.
 
 \section{Conclusion}
+% TODO: make this better
+This paper introduces Hailstorm, a Storm-like distributed stream processing
+framework for Haskell. By restricting our class of computation to commutative
+monoids and by exploiting Haskell's purity, the system guarantees exactly-once
+processing of messages without performance loss. Hailstorm maintains these
+guarantees even in the face of machine failures and an unreliable network. We
+look forward to developing it further.
 
 \bibliography{hailstorm}{}
 \bibliographystyle{abbrvnat}
