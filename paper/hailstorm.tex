@@ -190,6 +190,7 @@ Hackage for others to use.
 
 
 \subsection{Apache Zookeeper}
+\label{sec:zookeeper}
 Apache Zookeeper~\cite{zookeeper} is a highly-available distributed 
 configuration service, which Hailstorm uses extensively for process 
 registry and synchronization. Zookeeper's data model is roughly analogous 
@@ -209,13 +210,13 @@ Hailstorm uses the hzk library\footnote{
 \url{https://hackage.haskell.org/package/hzk}}, which exposes the
 Zookeeper C library to Haskell. The watcher notifications in Hailstorm occur in
 a seperate (OS) thread, which communicates the value of the change
-back to the worker thread using an MVar\footnote{\texttt{See ZKCluster.hs}}.
-
-\subsection{Clock}
-\label{sec:clock}
+back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
 
 \subsection{Spouts}
 %% TODO: Milind
+
+\subsubsection{Clock}
+\label{sec:clock}
 
 \subsection{Bolts}
 %% TODO: Milind, feel free to add any information here that you think is
@@ -225,16 +226,80 @@ back to the worker thread using an MVar\footnote{\texttt{See ZKCluster.hs}}.
 %% TODO: Milind, you should probably talk about this 
 
 \subsubsection{Low Water Mark}
-%% TODO: Milind, you should probably talk about this 
+%% TODO: Milind, you should probably talk about this
+
+\subsubsection{Snapshot Store}
+\label{sec:snapshot}
+%% TODO: Milind, you should probably talk about this
 
 \subsection{Sinks}
 %% TODO: Milind, you should probably talk about this 
 
 \subsection{Negotiator}
 \label{sec:negotiator}
+\begin{figure}
+  \includegraphics[width=0.45\textwidth]{images/master_state.pdf}
+  \caption{Master state machine for a topology. After initialization, the
+  topology loops between flowing and snapshotting indefinitely}
+  \label{fig:masterstate}
+\end{figure}
+
+The \textit{negotiator}\footnote{See \texttt{Negotiator.hs}} has full control 
+over all the processors of a Hailstorm topology. The negotiator shares 
+two related roles:
+\begin{enumerate}
+  \item Forcing bolts to snapshot with a valid clock
+  \item Recovering the state of the system if a processor 
+        becomes unreachable
+\end{enumerate}
+
+Upon registration, the negotiator creates a special ephemeral node for the
+topology called the \textit{master state}. The negotiator transitions the master
+state through the deterministic finite automaton shown in
+Figure~\ref{fig:masterstate}. Each processor in the topology creates a
+watcher for the master state, responding quickly to transitions.
+
+Initially, the topology begins in the \texttt{NegotiatorDisconnected} state which
+is indicated by the absence of a master state node in Zookeeper. When the
+negotiator boots up, it sets the master state to \texttt{Initialize} and waits
+for all processors to register under living processors (see
+Section~\ref{sec:zookeeper}). Once the expected nodes have been created, the
+negotiator waits for the bolts to load their snapshots from the snapshot store
+(see Section~\ref{sec:snapshot}). The bolts communicate their snapshot clock 
+their living processor nodes, and negotiator is then able change the master state to 
+\texttt{SpoutsRewind}. The spouts rewind to the clock, and pause, writing their
+position into their corresponding living processor nodes. Finally, the
+negotiator begins the main \textit{run loop}.
+
+Hailstorm's run loop consists of the negotiator alternating between snapshots
+and a grace period of data flow. When data is flowing without a desired snapshot
+clock, the negotiator sets the master state to \texttt{Flowing Nothing} and
+then waits a configerable grace period. When the grace period expires, the
+negotiator sets the state to \texttt{SpoutsPaused} and determines the next
+snapshot clock from the current spout offsets. When complete, the negotiator sets
+the master state to \texttt{Flowing NextClock}, which the bolts use to determine
+their snapshot. After the bolt snapshots are complete, the negotiator returns to
+\texttt{Flowing Nothing} and loops.
+
+The run loop can be interrupted by an unreachable processor. When a processor
+becomes unresponsible, their Zookeeper connection terminates and their
+corresponding ephemeral node is removed from the living processors directory.
+The negotiator is asynchronously notified through a watcher, and then sets the
+master state to \texttt{Initialize}. As part of this transition, the negotiator
+removes the living processor nodes for all processors in the topology. Each
+processor reads this as a signal to restart, so that the topology can restart in
+a clean state. Thus the \texttt{Initialize} master state is identical to that of
+the negotiator's initial start.
+
+\section{Haskell Implementation}
+%% TODO: Milind, we should probably talk about how we use Pipes+Pipes Concurrent 
+%% to wire up processors. Additionally, maybe we can discuss how a user
+%% specifies a bolt / typeclasses. Some of the details might fit better into the
+%% Bolt section?
 
 \subsection{Example Topology}
-Talk in detail about how hashtag counting works.
+Talk in detail about how hashtag counting works\footnote{See
+\texttt{Sample/WordCountSample.hs}}
 
 \section{Next Steps}
 
