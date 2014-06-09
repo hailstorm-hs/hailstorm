@@ -167,7 +167,6 @@ upcoming sections.
   \caption{Structure of Kafka partitions}
   \label{fig:kafka}
 \end{figure}
-
 Apache Kafka~\cite{kafka} is a distributed commit log that is used to buffer data between
 producing systems (e.g., the Twitter Firehose) and Hailstorm topologies. As
 described in~\ref{sec:clock}, Hailstorm requires the use of Kafka so it can
@@ -191,17 +190,48 @@ Hackage for others to use.
 
 
 \subsection{Apache Zookeeper}
+Apache Zookeeper~\cite{zookeeper} is a highly-available distributed 
+configuration service, which Hailstorm uses extensively for process 
+registry and synchronization. Zookeeper's data model is roughly analogous 
+to a tree-structured file system, where \textit{nodes} can either be 
+directories or small files. Nodes are either created indefinitely 
+or registered as \textit{ephemeral nodes}, which are automatically 
+deleted when their creator's connection is terminated. Most Zookeeper
+libraries also implement \textit{watchers} on nodes which allow a program to be
+asynchronously notified whenever a node or a node's data changes. 
 
-Zookeeper~\cite{zookeeper} is the best.
+When a Hailstorm processor starts up, it immediately registers an ephemeral node
+with its identifier underneath a Zookeeper directory called
+\texttt{living\_processors}. As described in Section~\ref{sec:negotiator}, the
+negotiator monitors this directory to ascertain the health of the system.
+
+Hailstorm uses the hzk library\footnote{
+\url{https://hackage.haskell.org/package/hzk}}, which exposes the
+Zookeeper C library to Haskell. The watcher notifications in Hailstorm occur in
+a seperate (OS) thread, which communicates the value of the change
+back to the worker thread using an MVar\footnote{\texttt{See ZKCluster.hs}}.
 
 \subsection{Clock}
 \label{sec:clock}
 
 \subsection{Spouts}
+%% TODO: Milind
 
 \subsection{Bolts}
+%% TODO: Milind, feel free to add any information here that you think is
+%% important 
+
+\subsubsection{State Splitting}
+%% TODO: Milind, you should probably talk about this 
+
+\subsubsection{Low Water Mark}
+%% TODO: Milind, you should probably talk about this 
 
 \subsection{Sinks}
+%% TODO: Milind, you should probably talk about this 
+
+\subsection{Negotiator}
+\label{sec:negotiator}
 
 \subsection{Example Topology}
 Talk in detail about how hashtag counting works.
