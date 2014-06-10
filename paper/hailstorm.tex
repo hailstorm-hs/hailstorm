@@ -212,7 +212,17 @@ a seperate (OS) thread, which communicates the value of the change
 back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
 
 \subsection{Spouts}
-%% TODO: Milind
+
+Spouts are the starting point for any flow of information
+through the Hailstorm system. Each spout has a one-to-one connection with a
+Kafka partition.  When specifying the topology, a client provides a function
+that converts a Kafka message (in the form of a byte string) to a tuple in a
+suitable form for processing by downstream processors. For example, a simple
+``word count'' topology could convert a word from Kafka into a \textit{(word,
+1)} tuple to facilitate counting in downstream bolts.
+
+% TODO: code for partition -> tuple here, or in implementation details?
+% I mean the word -> (word, 1) code
 
 \subsubsection{Clock}
 \label{sec:clock}
