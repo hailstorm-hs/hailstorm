@@ -80,7 +80,7 @@ guarantee that side-effects of computation are isolated to a single
 
 
 \section{Related Work}
-Hailstorm's technical design is based on that of Apache Storm~\cite{storm}. 
+Hailstorm's technical design is based on that of Apache Storm~\cite{storm}.
 Storm is a widely used stream processing framework for
 the Java Virtual Machine (JVM) allowing developers to upload jobs for continuous
 processing on a Storm cluster. Developers create a directed acyclic graph of
@@ -88,19 +88,19 @@ interconnected processing layers called a \textit{topology}.
 Messages are passed between layers as
 \textit{tuples}. Tuples originate in a \textit{spout}, which typically reads
 off of a distributed queue and are passed between layers of \textit{bolts} which
-perform computation. Each bolt receives a tuple, performs a computation, and 
+perform computation. Each bolt receives a tuple, performs a computation, and
 emits zero or more tuples to the next layer. Unlike Hailstorm, the bolts have
 may have side effects to their computation and state management / error recovery
-is left up to each developer. Accordingly, the system is only able to provide 
+is left up to each developer. Accordingly, the system is only able to provide
 ``at least once'' guarantees for processing each message in the queue. On
 component failure, Storm enters a ``tuple replay'' state where it re-sends
-messages from spouts in a topology. 
+messages from spouts in a topology.
 
-The theoretical underpinings of Hailstorm are inspired by a online essay, 
-``Exactly Once Semantics''~\cite{jackson2014}. Jackson, a contributor to the 
+The theoretical underpinings of Hailstorm are inspired by a online essay,
+``Exactly Once Semantics''~\cite{jackson2014}. Jackson, a contributor to the
 Storm framework, describes Kafka log offsets as a vector clock for the system
 state. This clock allows separate processors to perform synchronized snapshots
-without locking or direct communication. We further describe the offset clock 
+without locking or direct communication. We further describe the offset clock
 in Section~\ref{sec:clock}.
 
 Google's MillWheel system~\cite{millwheel} also addresses the issue of exactly
@@ -108,7 +108,7 @@ once delivery of messages in a stream processing context. Like Storm,
 messages flow through layers of computation to end up at a final result.
 MillWheel provides exactly-once semantics by maintaining set of recently
 processed tuples, discarding those that have recently appeared. Users of
-MillWheel are required to manually ensure that all computations are 
+MillWheel are required to manually ensure that all computations are
 idempotent, as system failure induces message re-delivery to the same processor.
 
 \section{Hailstorm Overview}
@@ -133,27 +133,27 @@ upcoming sections.
   partition.
 
 \item \textit{Spouts} are responsible for getting data into Hailstorm. Along
-  with a user-specified conversion function, they consume \texttt{ByteStrings} 
-  from Kafka and forward them as tuples to the next layer of computation. 
+  with a user-specified conversion function, they consume \texttt{ByteStrings}
+  from Kafka and forward them as tuples to the next layer of computation.
 
 \item \textit{Bolts} are the fundamental units of computation in Hailstorm.
-  Bolts take a user-specified pure monoidic operation which takes a (state, input-tuple) 
-  pair and produces a (state, output-tuple) pair. Bolt state is periodically 
+  Bolts take a user-specified pure monoidic operation which takes a (state, input-tuple)
+  pair and produces a (state, output-tuple) pair. Bolt state is periodically
   persisted to the snapshot store. Figure~\ref{fig:topology} shows multiple
   layers of bolts.
 
 \item \textit{Sinks} are the final stage of Hailstorm processing. Like bolts,
-  sinks take tuples from the previous layer and perform user-specified computation. 
+  sinks take tuples from the previous layer and perform user-specified computation.
   However, unlike bolts, the computation runs inside the IO monad allowing the
   user to connect Hailstorm to the real world: databases, web services or even the
-  console. 
+  console.
 
 \item \textit{Topologies} are user-specified directed acyclic graphs which
   describe how bolts, spouts and sinks connect together.
 
 \item \textit{Apache Zookeeper} is used as a global service registry for
   Hailstorm. Processors are registered as into Zookeeper and removed whenever
-  failures occur. 
+  failures occur.
 
 \item \textit{The negotiator} in Hailstorm manages the state of a topology: it is
   responsible for negotiating tuple snapshots and performing error recovery. The
@@ -164,8 +164,7 @@ upcoming sections.
 \subsection{Apache Kafka}
 \begin{figure}
   \includegraphics[width=0.45\textwidth]{images/kafka_log.png}
-  \caption{Structure of Kafka partitions}
-  \label{fig:kafka}
+  \caption{Structure of Kafka partitions}\label{fig:kafka}
 \end{figure}
 Apache Kafka~\cite{kafka} is a distributed commit log that is used to buffer data between
 producing systems (e.g., the Twitter Firehose) and Hailstorm topologies. As
@@ -178,28 +177,28 @@ Kafka website, shows the anatomy of a single topic as writes get fanned out to
 different partitions. Consumers, such as Hailstorm spouts, are able to read from
 individual partitions with a topic and consume mesages. Since the messages are
 structured in a log, it is possible to ``rewind'' consumers and have them read
-messages from earlier points in the log. Kafka also has a configerable replication 
+messages from earlier points in the log. Kafka also has a configerable replication
 mechanism and is able to maintain its ordering even in the event of machine failure.
 
 The latest version of the Kafka protocol lacks bindings for Haskell, however the
 librdkafka~\cite{rdkafka} library provides up-to-date bindings for C. As part
-of completing Hailstorm, we created the \textit{Haskakafka}\footnote{
+of completing Hailstorm, we created the \textit{Haskakafka}\footnote{%
 \url{http://hackage.haskell.org/package/haskakafka}} library that exposes
-librdkafka through Haskell's C FFI. We have since made the bindings available on
+librdkafka through Haskell's C FFI\@. We have since made the bindings available on
 Hackage for others to use.
 
 
 \subsection{Apache Zookeeper}
 \label{sec:zookeeper}
-Apache Zookeeper~\cite{zookeeper} is a highly-available distributed 
-configuration service, which Hailstorm uses extensively for process 
-registry and synchronization. Zookeeper's data model is roughly analogous 
-to a tree-structured file system, where \textit{nodes} can either be 
-directories or small files. Nodes are either created indefinitely 
-or registered as \textit{ephemeral nodes}, which are automatically 
+Apache Zookeeper~\cite{zookeeper} is a highly-available distributed
+configuration service, which Hailstorm uses extensively for process
+registry and synchronization. Zookeeper's data model is roughly analogous
+to a tree-structured file system, where \textit{nodes} can either be
+directories or small files. Nodes are either created indefinitely
+or registered as \textit{ephemeral nodes}, which are automatically
 deleted when their creator's connection is terminated. Most Zookeeper
 libraries also implement \textit{watchers} on nodes which allow a program to be
-asynchronously notified whenever a node or a node's data changes. 
+asynchronously notified whenever a node or a node's data changes.
 
 When a Hailstorm processor starts up, it immediately registers an ephemeral node
 with its identifier underneath a Zookeeper directory called
@@ -229,10 +228,10 @@ suitable form for processing by downstream processors. For example, a simple
 
 \subsection{Bolts}
 %% TODO: Milind, feel free to add any information here that you think is
-%% important 
+%% important
 
 \subsubsection{State Splitting}
-%% TODO: Milind, you should probably talk about this 
+%% TODO: Milind, you should probably talk about this
 
 \subsubsection{Low Water Mark}
 %% TODO: Milind, you should probably talk about this
@@ -242,23 +241,23 @@ suitable form for processing by downstream processors. For example, a simple
 %% TODO: Milind, you should probably talk about this
 
 \subsection{Sinks}
-%% TODO: Milind, you should probably talk about this 
+%% TODO: Milind, you should probably talk about this
 
 \subsection{Negotiator}
 \label{sec:negotiator}
 \begin{figure}
   \includegraphics[width=0.45\textwidth]{images/master_state.pdf}
   \caption{Master state machine for a topology. After initialization, the
-  topology loops between flowing and snapshotting indefinitely}
-  \label{fig:masterstate}
+  topology loops between flowing and snapshotting
+  indefinitely}\label{fig:masterstate}
 \end{figure}
 
-The \textit{negotiator}\footnote{See \texttt{Negotiator.hs}} has full control 
-over all the processors of a Hailstorm topology. The negotiator shares 
+The \textit{negotiator}\footnote{See \texttt{Negotiator.hs}} has full control
+over all the processors of a Hailstorm topology. The negotiator shares
 two related roles:
 \begin{enumerate}
   \item Forcing bolts to snapshot with a valid clock
-  \item Recovering the state of the system if a processor 
+  \item Recovering the state of the system if a processor
         becomes unreachable
 \end{enumerate}
 
@@ -274,8 +273,8 @@ negotiator boots up, it sets the master state to \texttt{Initialize} and waits
 for all processors to register under living processors (see
 Section~\ref{sec:zookeeper}). Once the expected nodes have been created, the
 negotiator waits for the bolts to load their snapshots from the snapshot store
-(see Section~\ref{sec:snapshot}). The bolts communicate their snapshot clock 
-their living processor nodes, and negotiator is then able change the master state to 
+(see Section~\ref{sec:snapshot}). The bolts communicate their snapshot clock
+their living processor nodes, and negotiator is then able change the master state to
 \texttt{SpoutsRewind}. The spouts rewind to the clock, and pause, writing their
 position into their corresponding living processor nodes. Finally, the
 negotiator begins the main \textit{run loop}.
@@ -307,7 +306,7 @@ the negotiator's initial start.
 \subsection{Network Processing}
 Hailstorm utilizes the Haskell Pipes~\cite{pipes} library
 in place of Lazy I/O. Within
-a processor, the next layer is modeled as a \texttt{Pool} consumer
+a processor, the next layer is modeled as a \texttt{Pool} consumer%
 \footnote{See \texttt{Processor/Pool.hs}} that keeps a connection pool
 of downstream processor sockets. The \texttt{Pool} consumer waits for a
 Hailstorm \texttt{Payload}, hashes it, and then sends it via a network socket
@@ -317,11 +316,11 @@ connection pool.
 Bolt and spout layers listen for incoming connections and process their
 messages. After initialization, they instantiate a \textit{mailbox} using the
 Pipes-Concurrency~\cite{pipes-concurrency} library and fork a listener
-thread\footnote{See \texttt{Processor/Downstream.hs}}. The listener thread 
-accepts upstream connections and forks handlers that push incoming tuples 
+thread\footnote{See \texttt{Processor/Downstream.hs}}. The listener thread
+accepts upstream connections and forks handlers that push incoming tuples
 into the mailbox. The main processor thread creates a Pipes pipeline that
 consumes messages from the mailbox, processes them in a pipes
-and then sends output to a consumer (\texttt{Pool} for bolts, 
+and then sends output to a consumer (\texttt{Pool} for bolts,
 IO for sinks).
 
 \subsection{Example Topology}
@@ -331,12 +330,12 @@ Talk in detail about how hashtag counting works\footnote{See
 
 \section{Next Steps}
 Our Hailstorm implementation is functionally complete, but could use some
-polishing before a public release. 
+polishing before a public release.
 
 Currently, the only the \texttt{HardcodedTopology} data type conforms to the the
 \texttt{Topology} type-class. Accordingly, a user of Hailstorm has to program
 the network port and address for each processor into the Hailstorm binary
-itself. A modification to Hailstorm would register each the network address 
+itself. A modification to Hailstorm would register each the network address
 in the Zookeeper processor registry. The modification would allow processors to
 be resumed on different machines then they started on.
 
