@@ -464,40 +464,7 @@ processor reads this as a signal to restart, so that the topology can restart in
 a clean state. Thus the \lstinline{Initialize} master state is identical to that of
 the negotiator's initial start.
 
-\section{Implementation Details}
-
-\subsection{Running Processors}
-
-Each of the processors in the topology (spouts, bolts and sinks) can be run
-independently, as long as they are uniquely identifiable (such as through
-unique port numbers). The \texttt{HailstormCLI.hs} sample executable included
-with the library allows such behavior, with processors runnable on different
-threads, cores, or machines.
-
-\subsection{Network Processing}
-\label{sec:network-processing}
-Hailstorm utilizes the Haskell Pipes~\cite{pipes} library
-in place of Lazy I/O. Within
-a processor, the next layer is modeled as a \lstinline{Pool} consumer%
-\footnote{See \texttt{Processor/Pool.hs}} that keeps a connection pool
-of downstream processor sockets. The \lstinline{Pool} consumer waits for a
-Hailstorm \lstinline{Payload}, hashes it, and then sends it via a network socket
-\lstinline{Handle}. Handles themselves are lazily created and maintained within a
-connection pool. In our initial implementation, messages are serialized using
-Haskell's \texttt{Show} method; we intend to migrate to a more efficient
-protocol in upcoming versions.
-
-Bolt and spout layers listen for incoming connections and process their
-messages. After initialization, they instantiate a \textit{mailbox} using the
-Pipes-Concurrency~\cite{pipes-concurrency} library and fork a listener
-thread\footnote{See \texttt{Processor/Downstream.hs}}. The listener thread
-accepts upstream connections and forks handlers that push incoming tuples
-into the mailbox. The main processor thread creates a Pipes pipeline that
-consumes messages from the mailbox, processes them in a pipes
-and then sends output to a consumer (\lstinline{Pool} for bolts,
-IO for sinks).
-
-\subsection{Example Topology}
+\section{Example Topology}
 In light of the technical details of Section~\ref{sec:overview}, we return the
 sample topology of Figure~\ref{fig:topology}. The topology uses 
 Hailstorm to calulate trending hashtags in real-time from Twitter
@@ -532,6 +499,39 @@ In the sample topology, the \textit{sink} receives the local top $n$ queues
 and merges them to compute the global top $n$ hashtags. Finally, the top $n$
 tags are emitted to the console. The action occurs in the IO Monad and could be 
 modified to update a database or website as appropriate.
+
+\section{Implementation Details}
+
+\subsection{Running Processors}
+
+Each of the processors in the topology (spouts, bolts and sinks) can be run
+independently, as long as they are uniquely identifiable (such as through
+unique port numbers). The \texttt{HailstormCLI.hs} sample executable included
+with the library allows such behavior, with processors runnable on different
+threads, cores, or machines.
+
+\subsection{Network Processing}
+\label{sec:network-processing}
+Hailstorm utilizes the Haskell Pipes~\cite{pipes} library
+in place of Lazy I/O. Within
+a processor, the next layer is modeled as a \lstinline{Pool} consumer%
+\footnote{See \texttt{Processor/Pool.hs}} that keeps a connection pool
+of downstream processor sockets. The \lstinline{Pool} consumer waits for a
+Hailstorm \lstinline{Payload}, hashes it, and then sends it via a network socket
+\lstinline{Handle}. Handles themselves are lazily created and maintained within a
+connection pool. In our initial implementation, messages are serialized using
+Haskell's \texttt{Show} method; we intend to migrate to a more efficient
+protocol in upcoming versions.
+
+Bolt and spout layers listen for incoming connections and process their
+messages. After initialization, they instantiate a \textit{mailbox} using the
+Pipes-Concurrency~\cite{pipes-concurrency} library and fork a listener
+thread\footnote{See \texttt{Processor/Downstream.hs}}. The listener thread
+accepts upstream connections and forks handlers that push incoming tuples
+into the mailbox. The main processor thread creates a Pipes pipeline that
+consumes messages from the mailbox, processes them in a pipes
+and then sends output to a consumer (\lstinline{Pool} for bolts,
+IO for sinks).
 
 \section{Next Steps}
 Our Hailstorm implementation is functionally complete, but could use some
