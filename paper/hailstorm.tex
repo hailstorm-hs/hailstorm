@@ -227,16 +227,6 @@ back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
 flow of information through the Hailstorm system. Each spout has a one-to-one
 connection with a Kafka partition.
 
-\begin{lstlisting}[caption=Client interface for a
-spout,label=lst:spout-defn,float]
-data Spout =
-  Spout { -- ...
-       , convertFn :: BS.ByteString -> PayloadTuple
-       , spoutSerializer :: PayloadTuple -> String
-       -- ...
-       }
-\end{lstlisting}
-
 When specifying the topology, a client provides a pure function that converts a
 Kafka message to a tuple in a suitable form for processing by downstream
 processors (see Listing~\ref{lst:spout-defn}).  For example, a simple ``word
