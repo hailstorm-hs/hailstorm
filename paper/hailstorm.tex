@@ -162,6 +162,14 @@ upcoming sections.
 \item \textit{Topologies} are user-specified directed acyclic graphs which
   describe how bolts, spouts and sinks connect together.
 
+\item \textit{Grouping functions} are functions that produce a hash value for a
+given input tuple. When emitting a tuple to the next layer in the topology, a
+processor uses the hash value to determine which instance of the target
+processor to send a tuple to. For example, if a bolt has 3 instances, and a
+spout emits a tuple $t$ whose hash under the bolt's grouping function $g(t)$ is
+$2 \pmod 3$, then the tuple will be emitted to the third instance (index 2) of
+the target bolt.
+
 \item \textit{Apache Zookeeper} is used as a global service registry for
   Hailstorm. Processors are registered as into Zookeeper and removed whenever
   failures occur.
