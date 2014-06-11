@@ -8,6 +8,7 @@
 \usepackage{hyperref}
 \usepackage{graphicx}
 \usepackage{listings}
+\usepackage{subcaption}
 
 \begin{document}
 
@@ -23,6 +24,7 @@
   language=Haskell,
   frame=trBL,
   breaklines=true,
+  captionpos=b,
 }
 
 \title{Hailstorm: Distributed Stream Processing with Exactly Once Semantics}
@@ -221,13 +223,18 @@ back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
 
 \subsection{Spouts}
 
-Spouts are the starting point for any flow of information through the Hailstorm
-system. Each spout has a one-to-one connection with a Kafka partition.  When
-specifying the topology, a client provides a pure function that converts a
+\textit{Spouts}\footnote{See \texttt{Spout.hs}} are the starting point for any
+flow of information through the Hailstorm system. Each spout has a one-to-one
+connection with a Kafka partition.
+
+When specifying the topology, a client provides a pure function that converts a
 Kafka message (in the form of a byte string) to a tuple in a suitable form for
-processing by downstream processors. For example, a simple ``word count''
+processing by downstream processors.  For example, a simple ``word count''
 topology could convert a word from Kafka into a \textit{(word, 1)} tuple to
 facilitate counting in downstream bolts.
+
+Along with the tuple itself, a spout also sends a (partition, offset) pair
+uniquely identifying the origin of the tuple.
 
 % TODO: code for partition -> tuple here, or in implementation details?
 % I mean the word -> (word, 1) code
@@ -250,17 +257,17 @@ the following sections.
 \subsection{Bolts}
 \label{sec:bolts}
 
-Bolts form the computational portion of the Hailstorm topology. Each bolt
-maintains an internal state (represented by the type \lstinline{BoltState}),
-which is updated as the computation advances. The key characteristic of
-Hailstorm bolt states is that they are commutative monoids\footnote{This is not
-  enforced. It is the client's responsibility to provide a \lstinline{mergeFn}
-  definition that performs a commutative \lstinline{mappend} between two
-  \lstinline{BoltState} instances.}.
-This allows any state to be represented as a \lstinline{mappend} of one or more
-older states. This has important implications for crash recoverability:
-having a snapshot of an older state means that computations can be replayed
-from that point forward instead of having to start from scratch.
+Bolts\footnote{See \texttt{Downstream.hs}} form the computational portion of
+the Hailstorm topology. Each bolt maintains an internal state (represented by
+the type \lstinline{BoltState}), which is updated as the computation advances.
+The key characteristic of Hailstorm bolt states is that they are commutative
+monoids\footnote{This is not enforced. It is the client's responsibility to
+  provide a \lstinline{mergeFn} definition that performs a commutative
+  \lstinline{mappend} between two \lstinline{BoltState} instances.}.  This
+  allows any state to be represented as a \lstinline{mappend} of one or more
+  older states. This has important implications for crash recoverability:
+  having a snapshot of an older state means that computations can be replayed
+  from that point forward instead of having to start from scratch.
 
 A subset of the client-provided bolt interface is shown in
 Listing~\ref{lst:bolt-defn}. Incoming tuples are converted to a monoidal
@@ -284,6 +291,7 @@ data Bolt =
 \end{lstlisting}
 
 \subsubsection{Updating state with incoming tuples}
+\label{sec:updating-state}
 
 Incoming tuples are always merged into the existing bolt state. Depending on
 whether the negotiator has posted a desired snapshot clock (see
@@ -299,31 +307,79 @@ Section~\ref{sec:negotiator}), this could involve either one or two states:
   splits its current state into state $A$ and $B$: its current state becomes
   $A$ and it initializes $B$ to \lstinline{mempty}.
 
-  \item As long as the snapshot has not been performed, the bolt maintains two
-  states---pre-snapshot state $A$ and post-snapshot state $B$---and merges
-  tuples into the appropriate state based on their source partition offsets,
-  and calculates the downstream tuple based on a combination of these two
-  states.  More formally, for a desired snapshot clock $C$, if an incoming
-  tuple originated from partition $p$ at offset $o$, then the tuple will be
-  merged into state $A$ if $o \leq C[p]$; otherwise, it is merged into $B$. The
+  \item As long as the bolt is not eligible to perform a snapshot (see
+  Section~\ref{sec:lwm} for when this is determined), the bolt maintains two
+  states: pre-snapshot state $A$ and post-snapshot state $B$. It merges tuples
+  into the appropriate state based on their source partition offsets, and
+  calculates the downstream tuple based on a combination of these two states.
+  More formally, for a desired snapshot clock $C$, if an incoming tuple
+  originated from partition $p$ at offset $o$, then the tuple will be merged
+  into state $A$ if $o \leq C[p]$; otherwise, it is merged into $B$. The
   downstream output tuple will be calculated from $A + B$.
 
-  \item When it is time to actually persist a snapshot, the bolt makes a copy
-  of pre-snapshot state $A$ and forks a thread to perform the write. In the
-  main thread, it merges states $A$ and $B$ and merges new tuples into this
-  single state, reverting to the no-snapshot phase.
+  \item When it is time to actually persist its state, the bolt forks a thread
+  to persist pre-snapshot state $A$. In the main thread, it merges states $A$
+  and $B$ and merges new tuples into this single state, reverting to the
+  no-snapshot phase.
 
 \end{itemize}
 
 \subsubsection{Low Water Mark}
-%% TODO: Milind, you should probably talk about this
+\label{sec:lwm}
 
-\subsubsection{Snapshot Store}
+After the snapshot request is received and a bolt bifurcates its state, it must
+wait till the pre-snapshot state is guaranteed to no longer be affected by
+incoming tuples. To help determine when this happens, bolts use another piece
+of information: the \textit{low water mark (LWM)}.
+
+A low water mark $LWM_k$ for a processor $k$ is simply a clock (see
+Section~\ref{sec:clock}), where offset $LWM_k[p]$ for partition $p$ is the
+\emph{lowest} offset seen by any processor upstream to $k$. It is calculated
+recursively (as shown in Figure~\ref{fig:lwm-calculation}), and indicates the
+\emph{least} amount of progress made for each partition in the entire topology.
+
+\begin{figure}
+  \begin{subfigure}[t]{0.45\columnwidth}
+    \includegraphics[width=\columnwidth]{images/lwm_spouts.pdf}
+    \caption{LWM for a spout has just one entry: the offset in the associated
+    partition.}
+  \end{subfigure}
+  \hfill%
+  \begin{subfigure}[t]{0.45\columnwidth}
+    \includegraphics[width=\columnwidth]{images/lwm_bolts.pdf}
+    \caption{LWM for a bolt is calculated as $min(LWM_k)$ for each upstream
+    $k$.}
+  \end{subfigure}
+  \caption{Calculating LWM for processors.}\label{fig:lwm-calculation}
+\end{figure}
+
+To help downstream bolts calculate their LWMs, payloads carry a map
+of upstream processor names to their respective LWMs, which is updated at each
+level.
+
+The LWM is used in determining snapshot eligibility as follows: a bolt may only
+persist its state when its LWM equals the desired snapshot clock in
+\emph{every} dimension. When that happens, future tuples are guaranteed to
+originate from offsets greater than ones in the desired snapshot clock, and
+thus the pre-snapshot state for a bolt will no longer change.
+
+\subsubsection{Saving and restoring snapshots}
 \label{sec:snapshot}
-%% TODO: Milind, you should probably talk about this
+
+When a bolt is eligible to snapshot its state, it forks a thread to perform the
+save. On boot-up, a bolt tries to restore its state from the provided
+\lstinline{SnapshotStore}. If there is nothing saved, it starts from an empty
+state.
 
 \subsection{Sinks}
-%% TODO: Milind, you should probably talk about this
+
+Sinks are at the bottom-most level of a topology. As the final computation
+step, they serve the role of gateway to the real world. Sinks often perform
+actions like printing to console or writing to a database (they are the only
+processors in the topology that are allowed to execute impure code).  There is
+no restriction to the type of computation performed on incoming tuples;
+however, since no snapshots are performed on sinks, non-idempotent operations
+may have unexpected results.
 
 \subsection{Negotiator}
 \label{sec:negotiator}
