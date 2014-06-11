@@ -227,6 +227,16 @@ back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
 flow of information through the Hailstorm system. Each spout has a one-to-one
 connection with a Kafka partition.
 
+\begin{lstlisting}[caption=Client interface for a
+spout,label=lst:spout-defn,float]
+data Spout =
+  Spout { -- ...
+       , convertFn :: BS.ByteString -> PayloadTuple
+       , spoutSerializer :: PayloadTuple -> String
+       -- ...
+       }
+\end{lstlisting}
+
 When specifying the topology, a client provides a pure function that converts a
 Kafka message to a tuple in a suitable form for processing by downstream
 processors (see Listing~\ref{lst:spout-defn}).  For example, a simple ``word
@@ -252,14 +262,14 @@ data Spout =
 % TODO: I don't like the placement here, but this sets up the concept of a
 % clock for later so it's important that it precedes all the remaining
 % sections.
-
-For the following sections, it is important to define a \textit{clock}. Put
-simply, a a clock is a map of Kafka partition names to offsets within
-respective partitions.  More formally, a clock $C$ will contain an offset
+We define the notion of a vector \textit{clock} that determines the 
+state of all processors regardless of message ordering.  Put
+simply, the clock is a map of Kafka partition names to offset values.
+More formally, a clock $C$ will contain an offset
 $C[p]$ for each Kafka partition $p$ that feeds the topology.
 
-Hailstorm uses clocks to coordinate between processors, as outlined in
-the following sections.
+Hailstorm uses clocks to ensure safe error recovery for processors, 
+as outlined in the following sections.
 
 \subsection{Bolts}
 \label{sec:bolts}
