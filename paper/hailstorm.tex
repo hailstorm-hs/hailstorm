@@ -123,7 +123,7 @@ MillWheel are required to manually ensure that all computations are
 idempotent, as system failure induces message re-delivery to the same processor.
 
 \section{Hailstorm Overview}
-
+\label{sec:overview}
 
 \begin{figure}
 \centering
@@ -391,12 +391,6 @@ may have unexpected results.
 
 \subsection{Negotiator}
 \label{sec:negotiator}
-\begin{figure}
-  \includegraphics[width=0.45\textwidth]{images/master_state.pdf}
-  \caption{Master state machine for a topology. After initialization, the
-  topology loops between flowing and snapshotting
-  indefinitely}\label{fig:masterstate}
-\end{figure}
 
 The \textit{negotiator}\footnote{See \texttt{Negotiator.hs}} has full control
 over all the processors of a Hailstorm topology. The negotiator shares
@@ -412,6 +406,13 @@ topology called the \textit{master state}. The negotiator transitions the master
 state through the deterministic finite automaton shown in
 Figure~\ref{fig:masterstate}. Each processor in the topology creates a
 watcher for the master state, responding quickly to transitions.
+
+\begin{figure}[h]
+  \includegraphics[width=0.45\textwidth]{images/master_state.pdf}
+  \caption{Master state machine for a topology. After initialization, the
+  topology loops between flowing and snapshotting
+  indefinitely}\label{fig:masterstate}
+\end{figure}
 
 Initially, the topology begins in the \lstinline{NegotiatorDisconnected} state which
 is indicated by the absence of a master state node in Zookeeper. When the
@@ -464,7 +465,9 @@ a processor, the next layer is modeled as a \lstinline{Pool} consumer%
 of downstream processor sockets. The \lstinline{Pool} consumer waits for a
 Hailstorm \lstinline{Payload}, hashes it, and then sends it via a network socket
 \lstinline{Handle}. Handles themselves are lazily created and maintained within a
-connection pool.
+connection pool. In our initial implementation, messages are serialized using
+Haskell's \texttt{Show} method; we intend to migrate to a more efficient
+protocol in upcoming versions.
 
 Bolt and spout layers listen for incoming connections and process their
 messages. After initialization, they instantiate a \textit{mailbox} using the
@@ -477,9 +480,40 @@ and then sends output to a consumer (\lstinline{Pool} for bolts,
 IO for sinks).
 
 \subsection{Example Topology}
-%%% TODO: find a home for this
-Talk in detail about how hashtag counting works\footnote{See
-\texttt{Sample/WordCountSample.hs}}
+In light of the technical details of Section~\ref{sec:overview}, we return the
+sample topology of Figure~\ref{fig:topology}. The topology uses 
+Hailstorm to calulate trending hashtags in real-time from Twitter
+\footnote{See \texttt{Sample/WordCountSample.hs}}. In a non-distributed setting,
+the computation would typically use the unix \texttt{sort} and \texttt{uniq}
+commands. Hailstorm enables the same principles to scale to datasets far beyond a
+single computer's memory.
+
+On the producer side, we enqueue messages into Kafka using a Python script. The script
+samples hashtags from the Twitter's web API and then enqueues them into Kafka as 
+UTF-8 bytestrings .
+
+As data streams into Kafka, Hailstorm streams data out. The spouts
+take the UTF-8 bytestrings, convert them into Haskell character lists
+and send them to the next layer of \textit{count} bolts. Our hashing function, 
+the native Haskell string hash, forces a 1:1 mapping betweem hashtag and bolt instance. 
+For example, \#love, would always be mapped to \textit{count-0}.
+
+The \textit{count} bolts aggregate individual hashtag occurrences into a running
+sum. This running sum is stored as a hash map 0 default value, making each addition 
+a monoidic operation. Hashtags are received, aggregated, and emitted with the running count.
+For example, \textit{count-0} could receive \texttt{(\#love,1)} and emit
+\texttt{(\#love, 101)} to the next layer of \textit{topn} bolts.
+
+Each \textit{topn} bolt keeps track of the local top $n$ trending hashtags 
+that have been sent to it. The computation utilizes the Haskell PSQueue
+library~\cite{psqueue}, implementing a pure keyed priority queue. Each hashtag
+is added to the queue, which is then trimmed to the top $n$ entries. The entire
+queue is sent to the next (and final) layer for processing.
+
+In the sample topology, the \textit{sink} receives the local top $n$ queues 
+and merges them to compute the global top $n$ hashtags. Finally, the top $n$
+tags are emitted to the console. The action occurs in the IO Monad and could be 
+modified to update a database or website as appropriate.
 
 \section{Next Steps}
 Our Hailstorm implementation is functionally complete, but could use some
