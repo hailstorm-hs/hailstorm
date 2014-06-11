@@ -457,7 +457,7 @@ negotiator begins the main \textit{run loop}.
 Hailstorm's run loop consists of the negotiator alternating between snapshots
 and a grace period of data flow. When data is flowing without a desired snapshot
 clock, the negotiator sets the master state to \lstinline{Flowing Nothing} and
-then waits a configerable grace period. When the grace period expires, the
+then waits a configerable grace period. After the grace period expires, the
 negotiator sets the state to \lstinline{SpoutsPaused} and determines the next
 snapshot clock from the current spout offsets. When complete, the negotiator sets
 the master state to \lstinline{Flowing NextClock}, which the bolts use to determine
