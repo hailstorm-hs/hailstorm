@@ -80,7 +80,7 @@ computation, abstracting away the unreliable nature of the network.
 
 This paper introduces Hailstorm, a stream processing framework in Haskell.
 Unlike Storm and Samza, Hailstorm mandates that all streaming computations must
-be both commutative and monoidic. Like Samza, it requires that all events must
+be both commutative and monoidal. Like Samza, it requires that all events must
 be initially stored as messages in Apache Kafka~\cite{kafka}.  These
 restrictions allow Hailstorm to make stronger processing guarantees about
 events: namely, that the each event will be processed \textit{exactly} once in
@@ -148,7 +148,7 @@ upcoming sections.
   from Kafka and forward them as tuples to the next layer of computation.
 
 \item[Bolts] are the fundamental units of computation in Hailstorm.
-  Bolts take a user-specified pure monoidic operation which takes a (state, input-tuple)
+  Bolts take a user-specified pure monoidal operation which takes a (state, input-tuple)
   pair and produces a (state, output-tuple) pair. Bolt state is periodically
   persisted to the snapshot store. Figure~\ref{fig:topology} shows multiple
   layers of bolts.
@@ -495,7 +495,7 @@ For example, \#love, would always be mapped to \textit{count-0}.
 
 The \textit{count} bolts aggregate individual hashtag occurrences into a running
 sum. This running sum is stored as a hash map 0 default value, making each addition 
-a monoidic operation. Hashtags are received, aggregated, and emitted with the running count.
+a monoidal operation. Hashtags are received, aggregated, and emitted with the running count.
 For example, \textit{count-0} could receive \texttt{(\#love,1)} and emit
 \texttt{(\#love, 101)} to the next layer of \textit{topn} bolts.
 
