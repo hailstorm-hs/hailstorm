@@ -243,7 +243,7 @@ tuple to facilitate counting in downstream bolts.
 
 Along with the tuple itself, a spout also sends a (partition, offset) pair
 corresponding to the origin of the tuple. This forms the \texttt{Payload}, 
-used in downstream processors for snapshotting (see \ref{sec:updating-state}).
+used in downstream processors for making snapshots (see \ref{sec:updating-state}).
 
 \begin{lstlisting}[caption=Client interface for a
 spout,label=lst:spout-defn,float]
@@ -438,8 +438,8 @@ watcher for the master state, responding quickly to transitions.
 \begin{figure}[h]
   \includegraphics[width=0.45\textwidth]{images/master_state.pdf}
   \caption{Master state machine for a topology. After initialization, the
-  topology loops between flowing and snapshotting
-  indefinitely}\label{fig:masterstate}
+  topology loops between flowing and making snapshots
+  indefinitely.}\label{fig:masterstate}
 \end{figure}
 
 Initially, the topology begins in the \lstinline{NegotiatorDisconnected} state which
