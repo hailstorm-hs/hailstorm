@@ -38,17 +38,17 @@
 
 \begin{abstract}
 
-In recent years, \textit{stream processing} has emerged as data analysis
+In recent years, \textit{stream processing} has emerged as a data analysis
 technique to handle real-time applications where the latency of Hadoop is
-inappropriate. Many popular systems, such as Twitter's Storm, provide a rigid
+unacceptable. Many popular systems, such as Twitter's Storm, provide a rigid
 platform for performing distributed computations over the network. Storm-like
 systems typically provide at-least-once processing with state management left
 to the implementor. We present a novel distributed stream processing framework,
 \textit{Hailstorm}\footnote{\url{https://github.com/hailstorm-hs/hailstorm}},
-which provides a platform to perform distributed computation on streams of data
-in Haskell. By restricting the class of computation to commutative monoids, our
-system is able to provide exactly-once semantics with little performance loss
-or added complexity.
+which is written in Haskell and provides a platform to perform distributed
+computation on streams of data. By restricting the class of computation to
+commutative monoids, our system is able to provide exactly-once semantics with
+little performance loss or added complexity.
 
 \end{abstract}
 
@@ -283,7 +283,7 @@ monoids\footnote{This is not enforced. It is the client's responsibility to
   older states. Commutativity ensures that ordering of messages is unimportant
   to the final result. Monoids have important implications for crash recoverability:
   a snapshot of an older state allows computations to start 
-  from point forward instead of starting from scratch.
+  from that point forward instead of starting from scratch.
 
 A subset of the client-provided bolt interface is shown in
 Listing~\ref{lst:bolt-defn}. Incoming tuples are converted to a monoidal
