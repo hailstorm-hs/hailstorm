@@ -366,10 +366,18 @@ thus the pre-snapshot state for a bolt will no longer change.
 \subsubsection{Saving and restoring snapshots}
 \label{sec:snapshot}
 
-When a bolt is eligible to snapshot its state, it forks a thread to perform the
-save. On boot-up, a bolt tries to restore its state from the provided
+Bolts receive an instance of a \lstinline{SnapshotStore} typeclass with two
+functions: \lstinline{saveSnapshot} and \lstinline{restoreSnapshot}. When a
+bolt is eligible to snapshot its state, it forks a thread to perform the save.
+On boot-up, a bolt tries to restore its state from the provided
 \lstinline{SnapshotStore}. If there is nothing saved, it starts from an empty
 state.
+
+In the current Hailstorm implementation, we provide a
+\lstinline{DirSnapshotStore} instance that creates a snapshot in a local
+directory. Ideally, one would want to provide other instances: one that uses an
+SQL database, or one that uses a distributed file system for greater fault
+tolerance.
 
 \subsection{Sinks}
 
@@ -438,10 +446,17 @@ a clean state. Thus the \lstinline{Initialize} master state is identical to that
 the negotiator's initial start.
 
 \section{Implementation Details}
-\subsection{Command Line Interface}
-%% TODO: write this
+
+\subsection{Running Processors}
+
+Each of the processors in the topology (spouts, bolts and sinks) can be run
+independently, as long as they are uniquely identifiable (such as through
+unique port numbers). The \texttt{HailstormCLI.hs} sample executable included
+with the library allows such behavior, with processors runnable on different
+threads, cores, or machines.
 
 \subsection{Network Processing}
+\label{sec:network-processing}
 Hailstorm utilizes the Haskell Pipes~\cite{pipes} library
 in place of Lazy I/O. Within
 a processor, the next layer is modeled as a \lstinline{Pool} consumer%
