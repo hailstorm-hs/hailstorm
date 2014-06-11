@@ -4,8 +4,10 @@
 
 \usepackage{amsmath}
 \usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \usepackage{hyperref}
 \usepackage{graphicx}
+\usepackage{listings}
 
 \begin{document}
 
@@ -15,6 +17,13 @@
 
 \titlebanner{banner above paper title}        % These are ignored unless
 \preprintfooter{short description of paper}   % 'preprint' option specified.
+
+\lstset{%
+  basicstyle=\ttfamily\footnotesize,
+  language=Haskell,
+  frame=trBL,
+  breaklines=true,
+}
 
 \title{Hailstorm: Distributed Stream Processing with Exactly Once Semantics}
 \subtitle{CS240h Final Project, Spring 2014}
@@ -123,7 +132,7 @@ idempotent, as system failure induces message re-delivery to the same processor.
 
 Figure~\ref{fig:topology} shows a complete example of a Hailstorm system used
 to calculate trending hashtags in real-time using the Twitter firehose. We give
-a brief overview of the various components describe them in detail in the
+a brief overview of the various components and describe them in detail in the
 upcoming sections.
 
 \begin{itemize}
@@ -133,7 +142,7 @@ upcoming sections.
   partition.
 
 \item \textit{Spouts} are responsible for getting data into Hailstorm. Along
-  with a user-specified conversion function, they consume \texttt{ByteStrings}
+  with a user-specified conversion function, they consume \lstinline{ByteStrings}
   from Kafka and forward them as tuples to the next layer of computation.
 
 \item \textit{Bolts} are the fundamental units of computation in Hailstorm.
@@ -202,7 +211,7 @@ asynchronously notified whenever a node or a node's data changes.
 
 When a Hailstorm processor starts up, it immediately registers an ephemeral node
 with its identifier underneath a Zookeeper directory called
-\texttt{living\_processors}. As described in Section~\ref{sec:negotiator}, the
+\lstinline{living_processors}. As described in Section~\ref{sec:negotiator}, the
 negotiator monitors this directory to ascertain the health of the system.
 
 Hailstorm uses the hzk library~\cite{hzk}, which exposes the
@@ -212,13 +221,13 @@ back to the worker thread using an MVar\footnote{See \texttt{ZKCluster.hs}}.
 
 \subsection{Spouts}
 
-Spouts are the starting point for any flow of information
-through the Hailstorm system. Each spout has a one-to-one connection with a
-Kafka partition.  When specifying the topology, a client provides a function
-that converts a Kafka message (in the form of a byte string) to a tuple in a
-suitable form for processing by downstream processors. For example, a simple
-``word count'' topology could convert a word from Kafka into a \textit{(word,
-1)} tuple to facilitate counting in downstream bolts.
+Spouts are the starting point for any flow of information through the Hailstorm
+system. Each spout has a one-to-one connection with a Kafka partition.  When
+specifying the topology, a client provides a pure function that converts a
+Kafka message (in the form of a byte string) to a tuple in a suitable form for
+processing by downstream processors. For example, a simple ``word count''
+topology could convert a word from Kafka into a \textit{(word, 1)} tuple to
+facilitate counting in downstream bolts.
 
 % TODO: code for partition -> tuple here, or in implementation details?
 % I mean the word -> (word, 1) code
@@ -227,8 +236,38 @@ suitable form for processing by downstream processors. For example, a simple
 \label{sec:clock}
 
 \subsection{Bolts}
-%% TODO: Milind, feel free to add any information here that you think is
-%% important
+
+Bolts form the computational portion of the Hailstorm topology. Each bolt
+maintains an internal state (represented by the type \lstinline{BoltState}),
+which is updated as the computation advances. The key characteristic of
+Hailstorm bolt states is that they are commutative monoids\footnote{This is not
+  enforced. It is the client's responsibility to provide a \lstinline{mergeFn}
+  definition that performs a commutative \lstinline{mappend} between two
+  \lstinline{BoltState} instances.}.
+This allows any state to be represented as a \lstinline{mappend} of one or more
+older states. This has important implications for crash recoverability:
+having a snapshot of an older state means that computations can be replayed
+from that point forward instead of having to start from scratch.
+
+A subset of the client-provided bolt interface is shown in
+Listing~\ref{lst:bolt-defn}. Incoming tuples are converted to a monoidal
+\lstinline{BoltState} using \lstinline{tupleToStateConverter} (a function that
+converts a key-value pair into a singleton map would be an example).  The
+\lstinline{mergeFn} performs commutative \lstinline{mappend}. The tuples
+themselves are transformed using the new state and
+\lstinline{transformTupleFn}) and forwarded downstream.
+
+\begin{lstlisting}[caption=Client interface for a
+bolt,label=lst:bolt-defn,float]
+data Bolt =
+  Bolt { -- ...
+       , transformTupleFn :: PayloadTuple -> BoltState -> PayloadTuple
+       , emptyState :: BoltState
+       , mergeFn :: BoltState -> BoltState -> BoltState
+       , tupleToStateConverter :: PayloadTuple -> BoltState
+       -- ...
+       }
+\end{lstlisting}
 
 \subsubsection{State Splitting}
 %% TODO: Milind, you should probably talk about this
@@ -267,36 +306,36 @@ state through the deterministic finite automaton shown in
 Figure~\ref{fig:masterstate}. Each processor in the topology creates a
 watcher for the master state, responding quickly to transitions.
 
-Initially, the topology begins in the \texttt{NegotiatorDisconnected} state which
+Initially, the topology begins in the \lstinline{NegotiatorDisconnected} state which
 is indicated by the absence of a master state node in Zookeeper. When the
-negotiator boots up, it sets the master state to \texttt{Initialize} and waits
+negotiator boots up, it sets the master state to \lstinline{Initialize} and waits
 for all processors to register under living processors (see
 Section~\ref{sec:zookeeper}). Once the expected nodes have been created, the
 negotiator waits for the bolts to load their snapshots from the snapshot store
 (see Section~\ref{sec:snapshot}). The bolts communicate their snapshot clock
 their living processor nodes, and negotiator is then able change the master state to
-\texttt{SpoutsRewind}. The spouts rewind to the clock, and pause, writing their
+\lstinline{SpoutsRewind}. The spouts rewind to the clock, and pause, writing their
 position into their corresponding living processor nodes. Finally, the
 negotiator begins the main \textit{run loop}.
 
 Hailstorm's run loop consists of the negotiator alternating between snapshots
 and a grace period of data flow. When data is flowing without a desired snapshot
-clock, the negotiator sets the master state to \texttt{Flowing Nothing} and
+clock, the negotiator sets the master state to \lstinline{Flowing Nothing} and
 then waits a configerable grace period. When the grace period expires, the
-negotiator sets the state to \texttt{SpoutsPaused} and determines the next
+negotiator sets the state to \lstinline{SpoutsPaused} and determines the next
 snapshot clock from the current spout offsets. When complete, the negotiator sets
-the master state to \texttt{Flowing NextClock}, which the bolts use to determine
+the master state to \lstinline{Flowing NextClock}, which the bolts use to determine
 their snapshot. After the bolt snapshots are complete, the negotiator returns to
-\texttt{Flowing Nothing} and loops.
+\lstinline{Flowing Nothing} and loops.
 
 The run loop can be interrupted by an unreachable processor. When a processor
 becomes unresponsible, their Zookeeper connection terminates and their
 corresponding ephemeral node is removed from the living processors directory.
 The negotiator is asynchronously notified through a watcher, and then sets the
-master state to \texttt{Initialize}. As part of this transition, the negotiator
+master state to \lstinline{Initialize}. As part of this transition, the negotiator
 removes the living processor nodes for all processors in the topology. Each
 processor reads this as a signal to restart, so that the topology can restart in
-a clean state. Thus the \texttt{Initialize} master state is identical to that of
+a clean state. Thus the \lstinline{Initialize} master state is identical to that of
 the negotiator's initial start.
 
 \section{Implementation Details}
@@ -306,11 +345,11 @@ the negotiator's initial start.
 \subsection{Network Processing}
 Hailstorm utilizes the Haskell Pipes~\cite{pipes} library
 in place of Lazy I/O. Within
-a processor, the next layer is modeled as a \texttt{Pool} consumer%
+a processor, the next layer is modeled as a \lstinline{Pool} consumer%
 \footnote{See \texttt{Processor/Pool.hs}} that keeps a connection pool
-of downstream processor sockets. The \texttt{Pool} consumer waits for a
-Hailstorm \texttt{Payload}, hashes it, and then sends it via a network socket
-\texttt{Handle}. Handles themselves are lazily created and maintained within a
+of downstream processor sockets. The \lstinline{Pool} consumer waits for a
+Hailstorm \lstinline{Payload}, hashes it, and then sends it via a network socket
+\lstinline{Handle}. Handles themselves are lazily created and maintained within a
 connection pool.
 
 Bolt and spout layers listen for incoming connections and process their
@@ -320,7 +359,7 @@ thread\footnote{See \texttt{Processor/Downstream.hs}}. The listener thread
 accepts upstream connections and forks handlers that push incoming tuples
 into the mailbox. The main processor thread creates a Pipes pipeline that
 consumes messages from the mailbox, processes them in a pipes
-and then sends output to a consumer (\texttt{Pool} for bolts,
+and then sends output to a consumer (\lstinline{Pool} for bolts,
 IO for sinks).
 
 \subsection{Example Topology}
@@ -332,8 +371,8 @@ Talk in detail about how hashtag counting works\footnote{See
 Our Hailstorm implementation is functionally complete, but could use some
 polishing before a public release.
 
-Currently, the only the \texttt{HardcodedTopology} data type conforms to the the
-\texttt{Topology} type-class. Accordingly, a user of Hailstorm has to program
+Currently, the only the \lstinline{HardcodedTopology} data type conforms to the the
+\lstinline{Topology} type-class. Accordingly, a user of Hailstorm has to program
 the network port and address for each processor into the Hailstorm binary
 itself. A modification to Hailstorm would register each the network address
 in the Zookeeper processor registry. The modification would allow processors to
