@@ -280,8 +280,9 @@ monoids\footnote{This is not enforced. It is the client's responsibility to
   provide a \lstinline{mergeFn} definition that performs a commutative
   \lstinline{mappend} between two \lstinline{BoltState} instances.}.  This
   allows any state to be represented as a \lstinline{mappend} of one or more
-  older states. This has important implications for crash recoverability:
-  having a snapshot of an older state means that computations can be replayed
+  older states. Commutativity ensures that ordering of messages is unimportant
+  to the final result. Monoids have important implications for crash recoverability:
+  a snapshot of an older state ensures that computations can start 
   from that point forward instead of having to start from scratch.
 
 A subset of the client-provided bolt interface is shown in
