@@ -137,32 +137,32 @@ to calculate trending hashtags in real-time using the Twitter firehose. We give
 a brief overview of the various components and describe them in detail in the
 upcoming sections.
 
-\begin{itemize}
-\item \textit{Apache Kafka} is used as the sole queuing mechanism for
+\begin{description}
+\item[Apache Kafka] is used as the sole queuing mechanism for
   messages. Messages are consumed off of Kafka \textit{partitions} and then
   entered into Hailstorm along with their \textit{offset} within the
   partition.
 
-\item \textit{Spouts} are responsible for getting data into Hailstorm. Along
+\item[Spouts] are responsible for getting data into Hailstorm. Along
   with a user-specified conversion function, they consume \lstinline{ByteStrings}
   from Kafka and forward them as tuples to the next layer of computation.
 
-\item \textit{Bolts} are the fundamental units of computation in Hailstorm.
+\item[Bolts] are the fundamental units of computation in Hailstorm.
   Bolts take a user-specified pure monoidic operation which takes a (state, input-tuple)
   pair and produces a (state, output-tuple) pair. Bolt state is periodically
   persisted to the snapshot store. Figure~\ref{fig:topology} shows multiple
   layers of bolts.
 
-\item \textit{Sinks} are the final stage of Hailstorm processing. Like bolts,
+\item[Sinks] are the final stage of Hailstorm processing. Like bolts,
   sinks take tuples from the previous layer and perform user-specified computation.
   However, unlike bolts, the computation runs inside the IO monad allowing the
   user to connect Hailstorm to the real world: databases, web services or even the
   console.
 
-\item \textit{Topologies} are user-specified directed acyclic graphs which
+\item[Topologies] are user-specified directed acyclic graphs which
   describe how bolts, spouts and sinks connect together.
 
-\item \textit{Grouping functions} are functions that produce a hash value for a
+\item[Grouping functions] are functions that produce a hash value for a
 given input tuple. When emitting a tuple to the next layer in the topology, a
 processor uses the hash value to determine which instance of the target
 processor to send a tuple to. For example, if a bolt has 3 instances, and a
@@ -170,15 +170,15 @@ spout emits a tuple $t$ whose hash under the bolt's grouping function $g(t)$ is
 $2 \pmod 3$, then the tuple will be emitted to the third instance (index 2) of
 the target bolt.
 
-\item \textit{Apache Zookeeper} is used as a global service registry for
+\item[Apache Zookeeper] is used as a global service registry for
   Hailstorm. Processors are registered as into Zookeeper and removed whenever
   failures occur.
 
-\item \textit{The negotiator} in Hailstorm manages the state of a topology: it is
+\item[The negotiator] in Hailstorm manages the state of a topology: it is
   responsible for negotiating tuple snapshots and performing error recovery. The
   negotiator itself maintains no state: if it dies, it can be resumed on any
   machine with no data loss.
-\end{itemize}
+\end{description}
 
 \subsection{Apache Kafka}
 \begin{figure}
