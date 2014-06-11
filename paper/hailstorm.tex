@@ -228,16 +228,22 @@ flow of information through the Hailstorm system. Each spout has a one-to-one
 connection with a Kafka partition.
 
 When specifying the topology, a client provides a pure function that converts a
-Kafka message (in the form of a byte string) to a tuple in a suitable form for
-processing by downstream processors.  For example, a simple ``word count''
-topology could convert a word from Kafka into a \textit{(word, 1)} tuple to
-facilitate counting in downstream bolts.
+Kafka message to a tuple in a suitable form for processing by downstream
+processors (see Listing~\ref{lst:spout-defn}).  For example, a simple ``word
+count'' topology could convert a word from Kafka into a \textit{(word, 1)}
+tuple to facilitate counting in downstream bolts.
 
 Along with the tuple itself, a spout also sends a (partition, offset) pair
 uniquely identifying the origin of the tuple.
 
-% TODO: code for partition -> tuple here, or in implementation details?
-% I mean the word -> (word, 1) code
+\begin{lstlisting}[caption=Client interface for a
+spout,label=lst:spout-defn,float]
+data Spout =
+  Spout { -- ...
+        , convertFn :: BS.ByteString -> PayloadTuple
+        , -- ...
+        }
+\end{lstlisting}
 
 \subsubsection{Clock}
 \label{sec:clock}
@@ -384,10 +390,22 @@ tolerance.
 Sinks are at the bottom-most level of a topology. As the final computation
 step, they serve the role of gateway to the real world. Sinks often perform
 actions like printing to console or writing to a database (they are the only
-processors in the topology that are allowed to execute impure code).  There is
-no restriction to the type of computation performed on incoming tuples;
-however, since no snapshots are performed on sinks, non-idempotent operations
-may have unexpected results.
+processors in the topology that are allowed to execute impure code). The user
+action is provided by the client in the form of a Pipes \lstinline{Consumer}
+that accepts upstream tuples (see Listing~\ref{lst:sink-defn}).
+
+There is no restriction to the type of computation performed on incoming
+tuples; however, since no snapshots are performed on sinks, non-idempotent
+operations may have unexpected results.
+
+\begin{lstlisting}[caption=Client interface for a
+sink,label=lst:sink-defn,float]
+data Sink =
+  Sink { -- ...
+       , outputConsumer :: Consumer PayloadTuple IO ()
+       , -- ...
+       }
+\end{lstlisting}
 
 \subsection{Negotiator}
 \label{sec:negotiator}
