@@ -235,7 +235,7 @@ tuple to facilitate counting in downstream bolts.
 
 Along with the tuple itself, a spout also sends a (partition, offset) pair
 corresponding to the origin of the tuple. This forms the \texttt{Payload}, 
-used for downstream processors for snapshotting (see \ref{sec:updating-state}).
+used in downstream processors for snapshotting (see \ref{sec:updating-state}).
 
 \begin{lstlisting}[caption=Client interface for a
 spout,label=lst:spout-defn,float]
