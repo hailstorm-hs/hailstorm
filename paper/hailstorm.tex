@@ -235,7 +235,20 @@ facilitate counting in downstream bolts.
 \subsubsection{Clock}
 \label{sec:clock}
 
+% TODO: I don't like the placement here, but this sets up the concept of a
+% clock for later so it's important that it precedes all the remaining
+% sections.
+
+For the following sections, it is important to define a \textit{clock}. Put
+simply, a a clock is a map of Kafka partition names to offsets within
+respective partitions.  More formally, a clock $C$ will contain an offset
+$C[p]$ for each Kafka partition $p$ that feeds the topology.
+
+Hailstorm uses clocks to coordinate between processors, as outlined in
+the following sections.
+
 \subsection{Bolts}
+\label{sec:bolts}
 
 Bolts form the computational portion of the Hailstorm topology. Each bolt
 maintains an internal state (represented by the type \lstinline{BoltState}),
@@ -251,8 +264,9 @@ from that point forward instead of having to start from scratch.
 
 A subset of the client-provided bolt interface is shown in
 Listing~\ref{lst:bolt-defn}. Incoming tuples are converted to a monoidal
-\lstinline{BoltState} using \lstinline{tupleToStateConverter} (a function that
-converts a key-value pair into a singleton map would be an example).  The
+\lstinline{BoltState} to facilitate merging with the existing state. The
+conversion is performed using \lstinline{tupleToStateConverter} (a function
+that converts a key-value pair into a singleton map would be an example). The
 \lstinline{mergeFn} performs commutative \lstinline{mappend}. The tuples
 themselves are transformed using the new state and
 \lstinline{transformTupleFn}) and forwarded downstream.
@@ -269,8 +283,37 @@ data Bolt =
        }
 \end{lstlisting}
 
-\subsubsection{State Splitting}
-%% TODO: Milind, you should probably talk about this
+\subsubsection{Updating state with incoming tuples}
+
+Incoming tuples are always merged into the existing bolt state. Depending on
+whether the negotiator has posted a desired snapshot clock (see
+Section~\ref{sec:negotiator}), this could involve either one or two states:
+
+\begin{itemize}
+
+  \item When there is no snapshot being requested, incoming tuples are merged
+  into a single state instance. The output tuple from a bolt is calculated
+  using this single state.
+
+  \item When a bolt receives a negotiator request to perform a snapshot, it
+  splits its current state into state $A$ and $B$: its current state becomes
+  $A$ and it initializes $B$ to \lstinline{mempty}.
+
+  \item As long as the snapshot has not been performed, the bolt maintains two
+  states---pre-snapshot state $A$ and post-snapshot state $B$---and merges
+  tuples into the appropriate state based on their source partition offsets,
+  and calculates the downstream tuple based on a combination of these two
+  states.  More formally, for a desired snapshot clock $C$, if an incoming
+  tuple originated from partition $p$ at offset $o$, then the tuple will be
+  merged into state $A$ if $o \leq C[p]$; otherwise, it is merged into $B$. The
+  downstream output tuple will be calculated from $A + B$.
+
+  \item When it is time to actually persist a snapshot, the bolt makes a copy
+  of pre-snapshot state $A$ and forks a thread to perform the write. In the
+  main thread, it merges states $A$ and $B$ and merges new tuples into this
+  single state, reverting to the no-snapshot phase.
+
+\end{itemize}
 
 \subsubsection{Low Water Mark}
 %% TODO: Milind, you should probably talk about this
