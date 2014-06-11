@@ -100,8 +100,8 @@ Messages are passed between layers as
 \textit{tuples}. Tuples originate in a \textit{spout}, which typically reads
 off of a distributed queue and are passed between layers of \textit{bolts} which
 perform computation. Each bolt receives a tuple, performs a computation, and
-emits zero or more tuples to the next layer. Unlike Hailstorm, the bolts have
-may have side effects to their computation and state management / error recovery
+emits zero or more tuples to the next layer. Unlike Hailstorm, the bolts
+may have side effects to their computation and state management/error recovery
 is left up to each developer. Accordingly, the system is only able to provide
 ``at least once'' guarantees for processing each message in the queue. On
 component failure, Storm enters a ``tuple replay'' state where it re-sends
@@ -475,7 +475,7 @@ a clean state. Thus the \lstinline{Initialize} master state is identical to that
 the negotiator's initial start.
 
 \section{Example Topology}
-In light of the technical details of Section~\ref{sec:overview}, we return the
+In light of the technical details of Section~\ref{sec:overview}, we return to the
 sample topology of Figure~\ref{fig:topology}. The topology uses 
 Hailstorm to calulate trending hashtags in real-time from Twitter
 \footnote{See \texttt{Sample/WordCountSample.hs}}. In a non-distributed setting,
